@@ -1,1 +1,106 @@
 title = "Modeling with types"
+
+[[exercise]]
+name = "01_exhaustive_match"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Start with the two E0004 errors: each names the pattern it's missing. Once they're fixed, ask which other function treats gift cards wrongly without the compiler noticing.",
+    "`can_cover` ends in `_ => true`, which quietly swallowed `GiftCard`: gift cards can pay any amount. A `_` arm on your own enum opts that `match` out of the compiler's checklist.",
+    "Name every variant instead: `PaymentMethod::Cash | PaymentMethod::BankTransfer { .. } => true`. Cards and gift cards can share one arm by binding the same name: `Card { credit_left: limit, .. } | GiftCard { balance: limit, .. } => amount <= *limit`.",
+]
+
+[[exercise]]
+name = "02_slice_patterns"
+kind = "implement"
+fails_at = "test"
+constraints = ["no-indexing"]
+hints = [
+    "Match on `segments.as_slice()`: patterns match slices, not `Vec`. Then write one arm per shape: `[]`, `[\"users\", id]`, `[\"users\", id, \"posts\"]`, `[\"static\", ..]`, and `_` for the rest.",
+    "`name @ ..` binds the skipped elements as a sub-slice, which has `join`. `[init @ .., last]` splits off the last element and `[first, middle @ .., last]` both ends. Watch the arm order: `[init @ .., last]` also matches a single item.",
+    "`[\"users\", id] => id.parse().map_or(Route::NotFound, Route::User)` and `[\"static\", rest @ ..] if !rest.is_empty()`. Palindrome: `[] | [_] => true`, then `[first, middle @ .., last] => first == last && is_palindrome(middle)`.",
+]
+
+[[exercise]]
+name = "03_nested_patterns"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Write one arm per rule, in the doc comment's order, and destructure all the way down: `Input::Key { key: Key::Char('s'), mods: CTRL } => Action::Save`. The constants `PLAIN`, `CTRL` and `ALT` work as patterns.",
+    "`Key::Char(digit @ '1'..='9')` tests the range and keeps the char. `key: Key::Esc | Key::F(10)` puts alternatives inside a field. `y: 0`, `Scroll(0)` and `width: width @ 20..` say in the pattern what a guard would say.",
+    "Tab number: `digit as u8 - b'0'`. Chords: `matches!(input, Input::Key { mods: Mods { ctrl: true, .. } | Mods { alt: true, .. }, .. })`, or with a guard: `matches!(input, Input::Key { mods, .. } if mods != PLAIN)`.",
+]
+
+[[exercise]]
+name = "04_binding_modes"
+kind = "fix"
+fails_at = "compile"
+constraints = ["no-clone"]
+hints = [
+    "Four functions, four errors. `display_name`: E0507, moving out of `contact.nickname`, which sits behind a reference. `nickname_len`: the edition 2024 rule. `verified_email`: E0308 on `&verified`. `verify_domain`: E0594, assigning through a shared reference.",
+    "Match a `&T` with a non-reference pattern and you bind references; match a `&mut T` and you bind `&mut`. So borrow the scrutinee (`match &contact.nickname`), drop the `ref` the pattern no longer needs, and iterate over `&mut contact.emails` where you assign.",
+    "`Some(nick) => nick` gives a `&String`, which coerces to the `&str` you return. In `verified_email`, `verified` is already a `&bool`: write `(address, verified)` and test `*verified`.",
+]
+
+[[exercise]]
+name = "05_flat_control_flow"
+kind = "constrain"
+fails_at = "clippy"
+constraints = ["pedantic", "no-unwrap"]
+hints = [
+    "Take clippy's errors one function at a time. The lint names are in the links: `question_mark` in `split_pair`, `manual_let_else` in `load`, `unnecessary_unwrap` in `tls`, `collapsible_if` in `effective_port`.",
+    "In a function that returns `Option`, \"bind or return `None`\" is `?`: `let (key, value) = line.split_once('=')?;`. In the loop, the way out also pushes to `bad_lines`, so it's `let Some((name, value)) = split_pair(line) else { ...; continue; };`.",
+    "`tls`: `cert.zip(key).map(|(cert, key)| Tls { .. })`. `effective_port`: `if let Some(raw) = env_port && let Ok(port) = raw.parse::<u16>() && port >= 1024 { return port; }` and then `config.port`.",
+]
+
+[[exercise]]
+name = "06_newtype_units"
+kind = "refactor"
+fails_at = "compile"
+hints = [
+    "Add the two structs, then change one signature at a time and fix what breaks. When the compiler refuses to subtract or compare a `Feet` and a `Meters`, ask what the old `f64` code was doing on that line.",
+    "`impl From<Feet> for Meters { fn from(feet: Feet) -> Self { Meters(feet.0 * METERS_PER_FOOT) } }`, and the same the other way. Implementing `From` also gives you `.into()`.",
+    "`clearance`: convert before subtracting, `Meters(Meters::from(altitude).0 - terrain.0)`, or implement `std::ops::Sub for Meters`. `is_safe`: `clearance(..) >= Meters::from(margin)`. `highest_point`: `profile.iter().copied().max_by(|a, b| a.0.total_cmp(&b.0))`.",
+]
+
+[[exercise]]
+name = "07_parse_dont_validate"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "`Username::parse`: normalize first (`trim`, then `to_ascii_lowercase`), then check the rules in the documented order. Count characters with `chars().count()`; `len()` counts bytes.",
+    "The first bad character: `name.chars().find(|c| !matches!(c, 'a'..='z' | '0'..='9' | '_'))`. For emails, `raw.trim().split_once('@')?` gives both halves; the domain must not contain a second `@`.",
+    "Keep what parsing learned: `Email { address: format!(\"{local}@{}\", domain.to_ascii_lowercase()), at: local.len() }`, so `domain()` is `&self.address[self.at + 1..]`. `valid.then(|| ..)` turns a `bool` into an `Option`.",
+]
+
+[[exercise]]
+name = "08_illegal_states"
+kind = "refactor"
+fails_at = "compile"
+constraints = ["no-clone"]
+hints = [
+    "List the states a ticket can really be in and the data that exists in each. Those are your variants: `Open`, `Assigned { agent }`, `Resolved { agent, note }`.",
+    "Replace the four fields with `status: Status` and rewrite each method as a `match` on it. One arm can bind `agent` from two variants: `Status::Assigned { agent } | Status::Resolved { agent, .. } => Some(agent)`.",
+    "To carry the agent from `Assigned` into `Resolved`: `let Status::Assigned { agent } = &mut self.status else { return false; };` then `self.status = Status::Resolved { agent: mem::take(agent), note: note.to_string() };`.",
+]
+
+[[exercise]]
+name = "09_typestate"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Fix the first error first; the E0282s after it are knock-on effects. E0392 says `S` is never used, and its help line names the tool for that.",
+    "Add a field `state: PhantomData<S>` (from `std::marker`) and set `state: PhantomData` wherever a `Release` is built. Then the errors in `ship` appear. Read which state each method was found for.",
+    "`ship` skipped a step: `tested.approve(reviewer).publish()`. And in the `Err` arm, `built` was moved into `test`; the release you got back is `failed`, so return `failed.log`.",
+]
+
+[[exercise]]
+name = "10_checkpoint_orders"
+kind = "implement"
+fails_at = "test"
+constraints = ["no-clone", "no-unwrap"]
+hints = [
+    "Start with `lines`, `tracking`, `is_cancellable` and `summary`: each is one `match`. Bind the same name from several variants with `|`, use `matches!` for the bool, and a slice pattern on `self.lines()` for the summary.",
+    "In `apply`, `self.state = match (&mut self.state, event) { .. };`. Arms that edit the draft in place `return Ok(())`; arms that move on evaluate to the new `State`. The last arm: `(state, event) => return Err(OrderError::InvalidTransition { state: state.name(), event: event.name() })`.",
+    "Moving on from a `&mut` binding: `(State::Draft { lines }, Event::Place) => State::Placed { total: total(lines), lines: mem::take(lines) }`, with `(State::Draft { lines }, Event::Place) if lines.is_empty() => return Err(..)` above it.",
+]
