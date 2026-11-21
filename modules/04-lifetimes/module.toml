@@ -1,1 +1,102 @@
 title = "Lifetimes in practice"
+
+[[exercise]]
+name = "01_elision_rules"
+kind = "constrain"
+fails_at = "clippy"
+hints = [
+    "For each function, count the reference inputs and ask which of them the result can point into. If elision would pick that same one, the name is noise.",
+    "The three rules: each elided input gets its own lifetime; with exactly one input lifetime, every elided output gets it; with `&self`/`&mut self`, outputs get `self`'s. `const` and `static` items are `'static` already.",
+    "Clippy flags `NOT_FOUND`, `split_entry`, `first_sentence`, `word_count`, `is_defined` and the `'p` in `strip_article`. Leave `shorter`, `'t`, `define`'s `'a` and `label`'s `'static`: the tests drop the argument, the glossary or the entries early to check them.",
+]
+
+[[exercise]]
+name = "02_who_it_borrows_from"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Read each failing test: what does it drop early, and what does it keep using? The result must not borrow from the thing that was dropped.",
+    "Elision ties a method's output to `&self`. `local_path` returns a piece of `path`; `section` returns string literals; `handler` returns a piece of `self.routes` and only reads `path`.",
+    "`fn local_path<'p>(&self, path: &'p str) -> Option<&'p str>`, `fn section(&self, path: &str) -> &'static str`, and `handler` needs no names at all: `fn handler(&self, path: &str) -> Option<&str>`.",
+]
+
+[[exercise]]
+name = "03_borrowed_fields"
+kind = "refactor"
+fails_at = "compile"
+hints = [
+    "Start with the failing test: a header value and the route have to outlive the `Request`. Where would they have to point for that to be possible?",
+    "Into `raw`. Make the fields `&'a str` in `struct Request<'a>`, drop every `.to_string()`, and declare `fn parse_request(raw: &str) -> Option<Request<'_>>`.",
+    "In `impl<'a> Request<'a>`, return `Option<&'a str>` and `&'a str`; elided outputs would be tied to `&self` again. `.map(|&(_, value)| value)` copies the `&'a str` out of the tuple.",
+]
+
+[[exercise]]
+name = "04_tokens_outlive_the_lexer"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Start with the error in `impl Iterator`: `next` promises `&'a str`, but `next_token` returns something tied to `&mut self`. Which of the two tells the truth about where a token points?",
+    "A token is a slice of the input, which lives for `'a`. Elision ties a method's output to `self` instead. Name `'a` in the return types of every method that hands out part of the input.",
+    "`fn peek(&self) -> Option<&'a str>`, `fn next_token(&mut self) -> Option<&'a str>` and `fn rest(&self) -> &'a str`. The bodies stay as they are.",
+]
+
+[[exercise]]
+name = "05_two_lifetimes"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "In each failing test, something stays borrowed after it should be free: the needle, or the `fields` Vec. Which reference in the struct does the kept data really point into?",
+    "One `'a` makes both references live equally long. The words only borrow from the haystack, and the fields only from the text, not from the Vec. `&'a mut Vec<&'a str>` is worse: `&mut T` is invariant in `T`, so `'a` can't shrink, and the Vec stays mutably borrowed as long as its contents live.",
+    "`struct WordsContaining<'h, 'n> { words: SplitWhitespace<'h>, needle: &'n str }` with `type Item = &'h str`; the constructor names both too. `struct FieldSink<'v, 's> { out: &'v mut Vec<&'s str>, .. }` with `push_line(&mut self, line: &'s str)`.",
+]
+
+[[exercise]]
+name = "06_boxed_closures"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Write `with` first: `self.rules.push(Box::new(rule))` (with `mut self`). The compiler suggests a `+ 'static` bound. Before you take it, look at what `rules_can_borrow_local_data` passes in.",
+    "In a type alias or a field, `Box<dyn Fn(&str) -> bool>` means `+ 'static`: no borrowed captures. Give everything a lifetime instead: `type Rule<'a> = Box<dyn Fn(&str) -> bool + 'a>;`, `struct LineFilter<'a>`, and `rule: impl Fn(&str) -> bool + 'a`.",
+    "`skip_prefixes` must not borrow its argument: copy the prefixes into a `Vec<String>`, `move` it into a closure, and return `LineFilter<'static>`. `keeps` is `self.rules.iter().all(|rule| rule(line))`.",
+]
+
+[[exercise]]
+name = "07_higher_ranked"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "There are three separate problems. For `distinct_keys` and the failing test, ask who chooses `'a`, and whether any choice could cover a `String` created inside the loop. The two `let` closures fail on their own, whatever you pass them to.",
+    "A lifetime parameter on a function or a struct is chosen once, by the caller. To accept a different lifetime on every call, the bound must be higher-ranked: `for<'x> Fn(&'x str) -> &'x str`, which is what an elided `Fn(&str) -> &str` means, in bounds and in `dyn Fn` types alike.",
+    "`F: Fn(&str) -> &str`; `type Step = Box<dyn Fn(&str) -> &str>;` with no lifetime on `Pipeline`, and `fn run<'t>(&self, tag: &'t str) -> &'t str`. A closure in a `let` isn't inferred as higher-ranked, even with `-> &str` written out: pass it straight to `.step(..)`, or use a `fn` item such as `str::trim`.",
+]
+
+[[exercise]]
+name = "08_precise_capturing"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Read the notes under the errors: rustc says a call \"may capture more lifetimes than intended\". For each returned iterator, which lifetimes does it really hold on to?",
+    "`row_indices` borrows nothing once the range is built: `+ use<>`. `fields` only borrows `line`: `+ use<'t>`. `header` really borrows `self`; leave it alone.",
+    "With `use<'t>`, `fields` fails with E0700 because the closure `|c| c == self.separator` captures `&self`. Pass the char itself, `line.split(self.separator)`. Don't take the suggested `use<'t, '_>`: that's the original problem again.",
+]
+
+[[exercise]]
+name = "09_scoped_threads"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Try `thread::spawn(move || ..)` in `longest_lines` and read the error: `docs` \"escapes the function body\", because the borrow would have to outlive `'static`. Which of the two functions can wait for its threads before returning, and which can't?",
+    "`longest_lines` can use `thread::scope(|s| ..)` and `s.spawn(..)`: scoped threads may borrow `docs` and return `&str`s into it. `spawn_count` returns a handle that outlives the call, so it needs `thread::spawn` with owned copies of `lines` and `needle`, moved in.",
+    "`let handles: Vec<_> = docs.iter().map(|doc| s.spawn(move || ..)).collect();` then join them in order. For ties keep the first line: `fold(\"\", |best, line| if line.len() > best.len() { line } else { best })` (`max_by_key` returns the last).",
+]
+
+[[exercise]]
+name = "10_checkpoint_log_reader"
+kind = "implement"
+fails_at = "test"
+constraints = ["no-clone", "no-unwrap"]
+hints = [
+    "`Record::parse`: `line.splitn(3, ' ')` gives the time, the level and the rest; `rest.split_once(':')` separates target and message. `let (Some(a), Some(b)) = (..) else { return Err(BadLine { line_no, line }) };` keeps the error paths short.",
+    "Every value comes from slicing a `&'a str`, so nothing needs `to_string`. `field` splits `self.message` (a `&'a str`), so what it finds is `'a` too. `Reader::next`: `self.lines.find(|(_, line)| !line.trim().is_empty())`, and remember that `enumerate` counts from 0.",
+    "`count_by_target`: a `Vec<(&'a str, usize)>`, updated with `match counts.iter_mut().find(..) { Some((_, n)) => *n += 1, None => counts.push(..) }`. `at_least`: `.filter(move |record| record.level >= level)`. Without `move`, the returned iterator would borrow the local `level` (E0373).",
+]
