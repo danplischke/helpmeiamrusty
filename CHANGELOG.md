@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **02 · Modeling with types**: 10 exercises (exhaustive matching, slice
+  patterns, nested patterns and `@` bindings, edition 2024 binding modes,
+  let-else and let chains, unit newtypes, parse-don't-validate, illegal
+  states made unrepresentable, typestate, and an order state machine
+  checkpoint), plus a 10-question quiz.
 - **05 · Error handling**: 10 exercises (`Option` ↔ `Result`, `?` and
   `From`, hand-written error enums, thiserror, anyhow context, collecting
   `Result`s, `Box<dyn Error + Send + Sync>`, a no-unwrap drill, and an INI
