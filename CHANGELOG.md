@@ -1,31 +1,48 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-11-21
 
-- **02 · Modeling with types**: 10 exercises (exhaustive matching, slice
-  patterns, nested patterns and `@` bindings, edition 2024 binding modes,
-  let-else and let chains, unit newtypes, parse-don't-validate, illegal
-  states made unrepresentable, typestate, and an order state machine
-  checkpoint), plus a 10-question quiz.
-- **03 · Traits & generics**: 10 exercises (bounds that match the body,
-  `impl Trait` vs `dyn Trait`, default methods and associated consts,
-  associated types vs generic parameters, the orphan rule, dyn
-  compatibility and trait upcasting, conversion traits, `Eq`/`Hash`/`Ord`
-  consistency and `Borrow`, operators on references, and a typed `Money`
-  checkpoint), plus a 10-question quiz.
-- **05 · Error handling**: 10 exercises (`Option` ↔ `Result`, `?` and
-  `From`, hand-written error enums, thiserror, anyhow context, collecting
-  `Result`s, `Box<dyn Error + Send + Sync>`, a no-unwrap drill, and an INI
-  config parser checkpoint), plus a 10-question quiz.
-- **06 · Iterators & collections**: 10 exercises (adaptors, laziness,
-  windows and chunks, loops rewritten as chains, sorting and searching,
-  custom iterators, `IntoIterator` for references, collecting into anything,
-  `VecDeque`/`BinaryHeap`/`BTreeMap::range`, and a log-analyzer checkpoint),
-  plus a 10-question quiz.
-- Quizzes can now ask about a `main` that returns `Err`: it matches "exits
-  with an error", not "panics".
-- The toolchain is pinned to Rust 1.97.0, the version every exercise and
-  quiz answer is verified on. rustup installs it automatically.
+Five more modules: the course now covers the whole core of the language.
+That's 66 exercises and 70 quiz questions.
+
+### Course
+
+- **02 · Modeling with types**: exhaustive matching, slice patterns, nested
+  patterns and `@` bindings, edition 2024 binding modes, let-else and let
+  chains, unit newtypes, parse-don't-validate, illegal states made
+  unrepresentable, typestate, and an order state-machine checkpoint.
+- **03 · Traits & generics**: bounds that match the body, `impl Trait`
+  vs `dyn Trait`, default methods and associated consts, associated types vs
+  generic parameters, the orphan rule, dyn compatibility and trait upcasting,
+  conversion traits, `Eq`/`Hash`/`Ord` consistency and `Borrow`, operators on
+  references, and a typed `Money` checkpoint.
+- **04 · Lifetimes in practice**: elision rules, whose data a result
+  borrows, structs that borrow, tokens that outlive their lexer, two
+  lifetimes and invariance, `Box<dyn Fn + 'a>` and `'static`, higher-ranked
+  bounds, edition 2024 `use<..>` precise capturing, scoped threads, and a
+  zero-copy log-reader checkpoint.
+- **05 · Error handling**: `Option` ↔ `Result`, `?` and `From`,
+  hand-written error enums, thiserror, anyhow context, collecting `Result`s,
+  `Box<dyn Error + Send + Sync>`, a no-unwrap drill, and an INI config parser
+  checkpoint.
+- **06 · Iterators & collections**: adaptors, laziness, windows and chunks,
+  loops rewritten as chains, sorting and searching, custom iterators,
+  `IntoIterator` for references, collecting into anything,
+  `VecDeque`/`BinaryHeap`/`BTreeMap::range`, and a log-analyzer checkpoint.
+
+Each module has 10 exercises and a 10-question quiz.
+
+### Runner and tooling
+
+- **Pinned toolchain.** The course is pinned to Rust 1.97.0, the version
+  every exercise and quiz answer is verified on. rustup installs it
+  automatically.
+- **Error exits in quizzes.** A quiz can now ask about a `main` that
+  returns `Err`: it matches "exits with an error", not "panics".
+- **Scoped verification.** `cargo rusty dev verify <filter>` builds only the
+  selected exercises, so work in progress elsewhere can't break it.
+- **Authoring guide.** `AUTHORING.md` documents the conventions every
+  module follows.
 
 ## [0.1.0] - 2026-11-21
 

@@ -3,9 +3,10 @@
 > A terminal-first course for someone who **already knew Rust** and wants
 > fluency back: fast where you remember, deep where you've gone rusty.
 
-**Status:** Phase 1 is built. The runner, modules 00–01 with their quizzes,
-the tutor setup for Claude Code and CI are in place. See the
-[README](README.md) to start.
+**Status:** The runner and modules 00–06 are built: 66 exercises and 70
+quiz questions, all verified in CI. Next come the capstone projects *logq*
+and *calc* (they need project support in the runner), then modules 07–10.
+See the [README](README.md) to start.
 
 ## 1. The idea in three principles
 

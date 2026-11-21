@@ -105,6 +105,11 @@ skills come with it:
 |---|---|---|
 | 00 · Warm-up & syntax speedrun | 7 | 10 questions |
 | 01 · Ownership & borrowing | 9 | 10 questions |
+| 02 · Modeling with types | 10 | 10 questions |
+| 03 · Traits & generics | 10 | 10 questions |
+| 04 · Lifetimes in practice | 10 | 10 questions |
+| 05 · Error handling | 10 | 10 questions |
+| 06 · Iterators & collections | 10 | 10 questions |
 
 The full curriculum is laid out in [PROPOSAL.md](PROPOSAL.md): 14 modules,
 six projects, a placement test, a "what's new since you left" track and
@@ -121,7 +126,8 @@ solution passes the stub's exact tests and rules, every file is
 rustfmt-clean, and every quiz question has exactly one right answer. CI runs
 it on every push.
 
-A module is a folder in `modules/` listed in `course.toml`:
+[AUTHORING.md](AUTHORING.md) has the conventions. A module is a folder in
+`modules/` listed in `course.toml`:
 
 ```text
 modules/01-ownership/
