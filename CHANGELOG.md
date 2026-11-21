@@ -7,6 +7,12 @@
   let-else and let chains, unit newtypes, parse-don't-validate, illegal
   states made unrepresentable, typestate, and an order state machine
   checkpoint), plus a 10-question quiz.
+- **03 · Traits & generics**: 10 exercises (bounds that match the body,
+  `impl Trait` vs `dyn Trait`, default methods and associated consts,
+  associated types vs generic parameters, the orphan rule, dyn
+  compatibility and trait upcasting, conversion traits, `Eq`/`Hash`/`Ord`
+  consistency and `Borrow`, operators on references, and a typed `Money`
+  checkpoint), plus a 10-question quiz.
 - **05 · Error handling**: 10 exercises (`Option` ↔ `Result`, `?` and
   `From`, hand-written error enums, thiserror, anyhow context, collecting
   `Result`s, `Box<dyn Error + Send + Sync>`, a no-unwrap drill, and an INI
