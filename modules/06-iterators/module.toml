@@ -1,1 +1,104 @@
 title = "Iterators & collections"
+
+[[exercise]]
+name = "01_adaptors"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Name the shape of each answer before writing it: \"keep some, transformed\" is `filter_map`, \"running state\" is `scan`, \"until something happens\" is `take_while`, \"several outputs per input\" is `flat_map`, \"two lists side by side\" is `zip`.",
+    "`.parse().ok()` turns a parse error into `None`, which `filter_map` skips. `scan(opening, |balance, &a| ..)` gets the state as `&mut` and returns `Option<item>`; follow it with `take_while`, not `filter`. `str::strip_prefix('#')` returns an `Option` too.",
+    "`mismatches`: `ours.iter().zip(bank).enumerate().filter(|(_, (a, b))| a != b).map(|(i, _)| i)`, then `.chain(shorter..longer)` for the positions `zip` dropped. `last_withdrawal`: `amounts.iter().copied().rfind(|&a| a < 0)`; clippy rejects `.filter(..).last()` (`double_ended_iterator_last`).",
+]
+
+[[exercise]]
+name = "02_lazy"
+kind = "fix"
+fails_at = "compile"
+constraints = ["no-clone"]
+hints = [
+    "For each error, ask: who is still using this value? A lazy iterator keeps its source, and everything its closures capture, borrowed until it is consumed or dropped.",
+    "`sum` and `count` both take the iterator by value: an iterator is single-pass. `iter()` borrows a Vec that dies when the function returns; `into_iter()` moves the Vec into the iterator. For `mark_all_sent`, the warning says it: iterators are lazy and do nothing unless consumed.",
+    "`average_len`: the slice knows its own length. `urgent`: collect the bodies first, then return `(bodies.len(), bodies)`. `into_recipients`: `outbox.into_iter().map(|m| m.to)`. `mark_all_sent`: a plain `for m in outbox { m.sent = true; }`.",
+]
+
+[[exercise]]
+name = "03_windows"
+kind = "constrain"
+fails_at = "clippy"
+constraints = ["no-indexing"]
+hints = [
+    "Clippy points at every `[..]`. For each function, ask which slice method hands you exactly the pieces the loop builds by hand: overlapping windows, fixed-size blocks, or runs of similar neighbours.",
+    "`windows(n)` yields overlapping `&[T]`s (and panics when `n` is 0); `array_windows::<N>()` yields `&[T; N]`s you can destructure; `chunks_exact(n)` yields full blocks and keeps the leftovers in `.remainder()`; `chunk_by(|a, b| ..)` starts a new chunk wherever the closure returns false.",
+    "`spikes`: `bpm.array_windows().enumerate().filter(|(_, [a, b, c])| b > a && b > c).map(|(i, _)| i + 1)`. `block_averages`: `let blocks = bpm.chunks_exact(n); let rest = blocks.remainder();`, then map `blocks`. `zone_spans`: in a `filter_map`, `run.first().map(|&b| (zone(b), run.len()))`.",
+]
+
+[[exercise]]
+name = "04_loops_to_chains"
+kind = "refactor"
+fails_at = "clippy"
+hints = [
+    "Take clippy's errors one function at a time. Each one names a lint, and the lint's page (the link in the message) shows the idiomatic version.",
+    "You'll meet `needless_range_loop`, `explicit_counter_loop`, `manual_find`, `manual_flatten`, `map_flatten`, `iter_skip_next` and `manual_inspect`. Each loop is a `sum`, an `enumerate`, a `find` or a `filter_map` in disguise.",
+    "Go past clippy's minimum: `total_cents` is `order.lines.iter().map(|l| u64::from(l.qty) * l.unit_cents).sum()`, `receipt` is `(1..).zip(&order.lines).map(..).collect()`, and `coupons` is `orders.iter().filter_map(|o| o.coupon.as_deref()).collect()`.",
+]
+
+[[exercise]]
+name = "05_sort_and_search"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Three kinds of error. \"the trait bound `f64: Ord` is not satisfied\": floats are only `PartialOrd`, because of NaN. \"lifetime may not live long enough\" in a `_by_key` closure: that key can't borrow from the element. And a mismatched type: read the docs of what `binary_search_by` returns.",
+    "Compare instead of extracting a key: `sort_by(|a, b| ..)`, `min_by(|a, b| ..)`, `dedup_by(|a, b| ..)`. For floats, `a.secs.total_cmp(&b.secs)` returns an `Ordering`. A binary search returns `Ok(index)` when it finds a match and `Err(index)`, the insertion point, when it doesn't.",
+    "`results.sort_by(|a, b| a.runner.cmp(&b.runner))`; `results.iter().min_by(|a, b| a.secs.total_cmp(&b.secs))` (it returns the first of equal minima); `results.dedup_by(|a, b| a.club == b.club)`. For the insert, `let (Ok(pos) | Err(pos)) = sorted.binary_search_by(..);`, or skip the `Result` with `sorted.partition_point(|f| f.runner <= new.runner)`.",
+]
+
+[[exercise]]
+name = "06_custom_iterator"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Start with `Slots::new`: how many whole slots fit? Everything else can work from that count. Mind `step == 0` and `end < start`.",
+    "Let `remaining` be the source of truth: `next` yields `self.next` and advances it, `next_back` yields the slot at `next + (remaining - 1) * step`, and both decrement `remaining`. `size_hint` is `(remaining, Some(remaining))`. In `backoff`, `saturating_mul` and `min` keep the doubling in bounds.",
+    "`self.remaining = self.remaining.checked_sub(1)?;` opens both `next` and `next_back`. `backoff`: `iter::successors(Some(first.min(cap)), move |&d| Some(d.saturating_mul(2).min(cap)))`. `batches`: create `costs.into_iter().peekable()` before `from_fn`, move it into the closure, and grow each batch with `while let Some(c) = costs.next_if(|&c| total + c <= budget)`.",
+]
+
+[[exercise]]
+name = "07_into_iterator"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "The errors say `&Playlist` (and `&mut Playlist`) is not an iterator: `for` needs `IntoIterator` impls for the reference types themselves. The `.rev()` and `.len()` errors are about `iter()`'s return type: `impl Iterator` promises nothing beyond `Iterator`.",
+    "Copy the shape of the existing impl: `impl<'a> IntoIterator for &'a Playlist` with `type Item = &'a Track` and `type IntoIter = std::slice::Iter<'a, Track>`. The `&mut` one uses `std::slice::IterMut<'a, Track>`. Have `iter()` return the concrete `std::slice::Iter<'_, Track>`.",
+    "In the `&'a Playlist` impl, `self` is the reference, so `fn into_iter(self) -> Self::IntoIter { self.tracks.iter() }` borrows. Same with `iter_mut()` for `&'a mut Playlist`. The usual convention: add an `iter_mut(&mut self)` method and have the two impls call `iter()` and `iter_mut()`.",
+]
+
+[[exercise]]
+name = "08_collect"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Each gradebook function is `scores.iter().map(..)` and one consumer. Which consumer? Let the return type decide: `collect` builds whatever the signature asks for.",
+    "A `String` can be collected from `String`s; a `HashMap` from `(key, value)` pairs, where a repeated key keeps the last value; `partition(|s| ..)` fills two Vecs; `unzip()` splits pairs into two Vecs. `std::array::from_fn(|i| ..)` builds an array from its indices.",
+    "`extend`: `for points in iter { self.bands[points.min(100) as usize / 10] += 1; }`. `from_iter`: start from `Histogram::default()`, call `extend(iter)` on it, return it. `labels`: `std::array::from_fn(|i| if i == 10 { \"100\".to_string() } else { format!(\"{}-{}\", i * 10, i * 10 + 9) })`.",
+]
+
+[[exercise]]
+name = "09_collections"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Pick the collection for each job: a queue trimmed from the front, a heap that can drop the smallest of the k kept so far, a sorted map sliced by key, and set difference in both directions.",
+    "`VecDeque::push_back` and `pop_front`; keep `total` in step with both. `BinaryHeap<Reverse<u32>>` pops the *smallest*, so push every time and pop whenever `len() > k`. `BTreeMap::range(from..to)` panics if `from > to`. `sort_by_cached_key` calls its key once per element.",
+    "`slowest`: finish with `heap.into_sorted_vec()`, which is ascending by `Reverse` and so slowest first, then `.into_iter().map(|Reverse(t)| t).collect()`. `churn`: `after.difference(before).copied().collect()`, and the other way round. `sort_hosts`: `hosts.sort_by_cached_key(|h| domain_key(h))`.",
+]
+
+[[exercise]]
+name = "10_checkpoint_logs"
+kind = "implement"
+fails_at = "test"
+constraints = ["no-unwrap"]
+hints = [
+    "Start with `FromIterator`: collect into a `Vec`, sort it by time with a *stable* sort, wrap it in a `Log`. Then `parse` is one `filter_map(..).collect()` and the `IntoIterator` impl is one line.",
+    "`between`: `partition_point(|e| e.at < t)` finds where time `t` starts; do it for `from` and for `to`. `get(lo..hi)` returns `None` instead of panicking when `from > to`. `incidents`: collect the error times, then `chunk_by(|a, b| b - a < gap)`.",
+    "`noisiest`: collect `errors_by_service()` into a `Vec<(&str, usize)>`, then `sort_by_key(|&(_, n)| std::cmp::Reverse(n))` and `truncate(k)`. The BTreeMap already gave alphabetical order, and a stable sort keeps it among equal counts.",
+]
