@@ -1,0 +1,252 @@
+# Predict-the-output questions. The runner compiles and runs each snippet;
+# the right choice is whichever matches what actually happens. Special
+# choices: "does not compile", "panics", "runs forever", "compiles".
+
+[[question]]
+prompt = "What happens?"
+code = '''
+struct Words<'a> {
+    rest: &'a str,
+}
+
+impl<'a> Words<'a> {
+    fn next_word(&mut self) -> Option<&str> {
+        let text = self.rest.trim_start();
+        if text.is_empty() {
+            return None;
+        }
+        let end = text.find(' ').unwrap_or(text.len());
+        let (word, rest) = text.split_at(end);
+        self.rest = rest;
+        Some(word)
+    }
+}
+
+fn main() {
+    let mut words = Words { rest: "borrow check" };
+    let first = words.next_word();
+    let second = words.next_word();
+    println!("{first:?} {second:?}");
+}
+'''
+choices = ['Some("borrow") Some("check")', "does not compile"]
+explain = """
+The elided output of `next_word` is tied to `&mut self`, not to `'a`. So
+`first` keeps `words` mutably borrowed, and the second call needs another
+`&mut` while `first` is alive: E0499. Returning `Option<&'a str>` says the
+word points into the input instead; then both calls compile, and the words
+may even outlive `words`.
+"""
+drill = "04-lifetimes/04_tokens_outlive_the_lexer"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn push<'a>(names: &mut Vec<&'a str>, name: &'a str) {
+    names.push(name);
+}
+
+fn main() {
+    let mut names: Vec<&'static str> = vec!["ann"];
+    let bob = String::from("bob");
+    push(&mut names, &bob);
+    println!("{names:?}");
+}
+'''
+choices = ['["ann", "bob"]', "does not compile"]
+explain = """
+`&mut T` is invariant in `T`: through `&mut Vec<&'static str>`, `'a` must be
+exactly `'static`, so `&bob` would have to live forever (E0597). Without the
+annotation, `names` is inferred as `Vec<&'x str>` for a shorter `'x` and it
+compiles. A plain `&'static str` can shrink to a shorter lifetime; behind a
+`&mut`, it can't.
+"""
+drill = "04-lifetimes/05_two_lifetimes"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::fmt::Display;
+
+fn keep<T: Display + 'static>(item: T) -> Box<dyn Display> {
+    Box::new(item)
+}
+
+fn main() {
+    let mut name = String::from("fer");
+    name.push_str("ris");
+    let kept = keep(name);
+    println!("{kept}");
+}
+'''
+choices = ["ferris", "does not compile"]
+explain = """
+`T: 'static` means "`T` holds no borrow shorter than `'static`", not "the
+value lives forever". A `String` owns its data, so it qualifies, even one
+built at runtime and dropped normally later. `keep(&name)` would fail: a
+reference to a local isn't `'static`.
+"""
+drill = "04-lifetimes/06_boxed_closures"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let greeting = String::from("hi");
+    let say: Box<dyn Fn()> = Box::new(|| println!("{greeting}"));
+    say();
+}
+'''
+choices = ["hi", "does not compile"]
+explain = """
+Inside a function body, the bound of `Box<dyn Fn()>` in a `let` annotation is
+inferred, so the box may hold a closure that borrows `greeting`. In a struct
+field, a type alias or a function signature, the same type means
+`Box<dyn Fn() + 'static>`, and this closure would be rejected (E0597). There,
+write `Box<dyn Fn() + 'a>`.
+"""
+drill = "04-lifetimes/06_boxed_closures"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let first_word = |s: &str| s.split(' ').next().unwrap_or("");
+    println!("{}", first_word("hello world"));
+}
+'''
+choices = ["hello", "hello world", "does not compile"]
+explain = """
+A closure in a `let` has no expected signature to learn from, so it isn't
+inferred as higher-ranked: its return type gets its own lifetime, unrelated
+to the argument's ("returning this value requires that `'1` must outlive
+`'2`"). Writing `-> &str` doesn't help. Pass the closure straight to a
+function with an `Fn(&str) -> &str` bound, or write a `fn`.
+"""
+drill = "04-lifetimes/07_higher_ranked"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+use std::thread;
+
+fn main() {
+    let mut totals = vec![0; 3];
+    thread::scope(|s| {
+        for (i, total) in totals.iter_mut().enumerate() {
+            s.spawn(move || *total = i * 10);
+        }
+    });
+    println!("{totals:?}");
+}
+'''
+choices = ["[0, 10, 20]", "[0, 0, 0]", "does not compile"]
+explain = """
+`thread::scope` joins every thread spawned inside it before it returns, so
+those threads may borrow locals, mutably too: each one gets its own element
+from `iter_mut`. With `thread::spawn` this wouldn't compile, because a
+spawned thread may outlive `totals`, so its closure must be `'static`.
+"""
+drill = "04-lifetimes/09_scoped_threads"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+struct User {
+    name: String,
+}
+
+fn main() {
+    let mut users = vec![
+        User { name: "cy".to_string() },
+        User { name: "ann".to_string() },
+    ];
+    users.sort_by_key(|u| u.name.as_str());
+    for u in &users {
+        print!("{} ", u.name);
+    }
+    println!();
+}
+'''
+choices = ["ann cy", "cy ann", "does not compile"]
+explain = """
+`sort_by_key<K, F: FnMut(&T) -> K>` is higher-ranked over the element
+borrow, but `K` is a single type chosen outside it, so the key can't borrow
+from the element ("lifetime may not live long enough"). Compare in place with
+`sort_by(|a, b| a.name.cmp(&b.name))`, or use an owned key with
+`sort_by_cached_key`.
+"""
+drill = "04-lifetimes/07_higher_ranked"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn positions(v: &[i32]) -> impl Iterator<Item = usize> {
+    0..v.len()
+}
+
+fn main() {
+    let mut v = vec![10, 20];
+    let pos = positions(&v);
+    v.push(30);
+    for i in pos {
+        print!("{i} ");
+    }
+    println!();
+}
+'''
+choices = ["0 1", "0 1 2", "does not compile"]
+explain = """
+In edition 2024 a returned `impl Trait` captures every lifetime in scope,
+`v`'s included, even though `0..v.len()` borrows nothing. So `pos` keeps `v`
+borrowed and `push` is E0502. With `-> impl Iterator<Item = usize> + use<>`
+(Rust 1.82) it captures nothing and prints "0 1". In edition 2021 it
+compiled as written.
+"""
+drill = "04-lifetimes/08_precise_capturing"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::cell::RefCell;
+
+fn total_len() -> usize {
+    let words = RefCell::new(vec!["a", "bb"]);
+    words.borrow().iter().map(|w| w.len()).sum()
+}
+
+fn main() {
+    println!("{}", total_len());
+}
+'''
+choices = ["3", "panics", "does not compile"]
+explain = """
+Edition 2024 drops the temporaries of a block's tail expression before the
+block's local variables. The `Ref` from `words.borrow()` is gone before
+`words` is, so this compiles. In edition 2021 it was E0597 ("`words` does
+not live long enough"), and the usual workaround was `let n = ...; n`.
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::cell::RefCell;
+
+fn main() {
+    let names = RefCell::new(vec!["ann"]);
+    if let Some(name) = names.borrow().iter().find(|n| n.starts_with('z')) {
+        print!("found {name} ");
+    } else {
+        names.borrow_mut().push("zed");
+    }
+    println!("{:?}", names.borrow());
+}
+'''
+choices = ['["ann", "zed"]', "panics", "does not compile"]
+explain = """
+Edition 2024 drops the temporaries of an `if let` scrutinee before the
+`else` branch runs, so the `Ref` from `names.borrow()` is released and
+`borrow_mut()` succeeds. In edition 2021 the `Ref` lived to the end of the
+whole `if let ... else`, and this panicked with "already borrowed". In the
+`then` branch it's still alive, since `name` borrows from it.
+"""
