@@ -1,1 +1,102 @@
 title = "Traits & generics"
+
+[[exercise]]
+name = "01_bounds"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Read each error's `help:` line. It names the trait the body relies on: `>` on a `T`, `to_string` on a `T`, a `T` as a `HashMap` key.",
+    "`largest` needs `PartialOrd` (not `Ord`: the tests pass floats). `join_all` needs `Display`. In `tally`, `item.clone()` on a `&T` clones the *reference* unless `T: Clone`, which is why the map came out as `HashMap<&T, _>`.",
+    "`fn tally<T>(items: &[T]) -> HashMap<T, usize> where T: Eq + Hash + Clone`. For `render`, bound the method, not the impl: `fn render(&self) -> String where T: Display`.",
+]
+
+[[exercise]]
+name = "02_dispatch"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "There are four root causes behind the errors. Start with `total_area`: how big is a `dyn Shape`? Then `parse_shape`: which single type could `impl Shape` stand for there?",
+    "Trait objects go behind a pointer: `&[Box<dyn Shape>]`, and `Option<Box<dyn Shape>>` with `Some(Box::new(..))`. In `main`, `vec![Box::new(a), Box::new(b)]` takes its element type from the first element, so annotate the binding.",
+    "For `describe`, read the `help:` under the last errors: generic parameters are `Sized` unless you opt out. `fn describe<S: Shape + ?Sized>(shape: &S)` accepts `&Rect` and `&dyn Shape` alike.",
+]
+
+[[exercise]]
+name = "03_default_methods"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Inside a default method you can use only what `Channel` and its supertrait promise: `self.deliver(..)`, `self.history()`, `Self::MAX_CHARS`, and `Display`, so `{self}` works in `format!`.",
+    "`send`: build the line with `format!(\"[{self}] {text}\")` and compare `line.chars().count()` with `Self::MAX_CHARS`. `last_line`: `self.history().last()`. `Email` sets its own value with `const MAX_CHARS: usize = 1000;` inside its impl block.",
+    "Default `broadcast`: `texts.iter().filter(|text| self.send(text)).count()`. `Pager` overrides it in its own impl: `texts.last().map_or(0, |text| usize::from(self.send(text)))`.",
+]
+
+[[exercise]]
+name = "04_assoc_or_generic"
+kind = "refactor"
+fails_at = "compile"
+hints = [
+    "Try adding a second `impl Handler for Logger` with `type Event = Key`: E0119, conflicting implementations. An associated type allows one impl per type. Which of the two traits needs several impls per type, and which needs only one?",
+    "Swap the designs. `trait Handler<E> { fn handle(&mut self, event: &E); }` lets `Logger` implement `Handler<Click>` and `Handler<Key>`. `trait Source { type Event; .. }`: a source produces one kind of event, so generic code can call it `S::Event` instead of carrying an extra parameter.",
+    "`fn pump<S: Source, H: Handler<S::Event>>(..)`. `struct Recorder<S: Source> { source: S, seen: Vec<S::Event> }` and `impl<S: Source> Recorder<S> where S::Event: Clone { .. }`.",
+]
+
+[[exercise]]
+name = "05_orphan_rule"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "E0117 and E0116 both say `Series` isn't a local type: a type alias is another name for `Vec<Reading>`. E0119 is separate: which types does `impl<T: fmt::Display> Summary for T` already cover?",
+    "Make it a tuple struct, `struct Series(Vec<Reading>);`, and reach the readings through `self.0`. Delete `impl Summary for Reading`: `Reading` is `Display`, so the blanket impl already gives it the same one-line summary.",
+    "`collect()` can't build a `Series` (it doesn't implement `FromIterator`), so wrap the result: `Series(self.0.iter().filter(..).copied().collect())`. In `main`, build it with `Series(vec![..])`. Leave `impl From<Reading> for f64` alone: it's allowed.",
+]
+
+[[exercise]]
+name = "06_dyn_compatible"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "E0038 lists exactly which methods keep `Filter` from being used as `dyn Filter`, and why. You want to keep both methods for concrete filters. The other errors on `then` already suggest the fix.",
+    "Add `where Self: Sized` to `apply_all` and to `then`. They leave the vtable, so `dyn Filter` works, and `Trim.then(Upper)` still does. Then a new error appears in `labels`: read its last note.",
+    "A `&Box<dyn Filter>` isn't a `&dyn Filter`. Get the trait object out of the box with `label(filter.as_ref())` (or `&**filter`), and trait upcasting turns the `&dyn Filter` into the `&dyn Named` that `label` wants.",
+]
+
+[[exercise]]
+name = "07_conversions"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "`TryFrom<i64> for Port`: let std do the range check. There's already a `TryFrom<i64>` impl for `u16`. Which `u16` value is still not a valid `Port`?",
+    "`match u16::try_from(n) { Ok(0) => .., Ok(port) => .., Err(_) => .. }`. `Endpoint::new`: `Self { host: host.into(), ..Self::default() }`. `is_loopback`: `matches!(host.as_ref(), \"localhost\" | \"127.0.0.1\" | \"::1\")`.",
+    "`from_str`: `s.strip_prefix(\"https://\")` tells you `tls` and the rest; then `rest.rsplit_once(':').ok_or(EndpointError::MissingPort)?`, `port.parse::<i64>().map_err(|_| EndpointError::NotANumber)?`, and `Port::try_from(number).map_err(EndpointError::Port)?`.",
+]
+
+[[exercise]]
+name = "08_eq_hash_ord"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "`eq`: `str` has a method that compares ignoring ASCII case. `borrow`: hand out a `&str` to the `String` inside. Thanks to that `Borrow` impl, `self.counts.get_mut(sku)` and `self.counts[sku]` take a `&str` directly.",
+    "`cmp`: the most important key first, then the tie-breaker: `self.priority.cmp(&other.priority).then(other.id.cmp(&self.id))`. Swapping `self` and `other` reverses that one key.",
+    "If `equal_usernames_hash_the_same` still fails: what does `#[derive(Hash)]` hash? Take `Hash` out of the derive and hash what `eq` compares: `impl Hash for Username { fn hash<H: Hasher>(&self, state: &mut H) { self.0.to_ascii_lowercase().hash(state); } }`.",
+]
+
+[[exercise]]
+name = "09_operators"
+kind = "constrain"
+fails_at = "clippy"
+constraints = ["no-clone"]
+hints = [
+    "Each `.clone()` exists because the only operators take a `Signal` by value. What would `&a - &b` need in order to compile?",
+    "Implement each operator for `&Signal` too: `impl Sub<&Signal> for &Signal { type Output = Signal; .. }`, `impl Mul<f64> for &Signal`, `impl Neg for &Signal`, and `impl AddAssign<&Signal> for Signal`. `mixed` already works on references.",
+    "With those in place: `mix += track;`, `a - b`, `-a`, and `a * (1.0 - t) + b * t` (two owned `Signal`s added by value). Optionally let the by-value impls delegate, e.g. `fn sub(self, rhs: Signal) -> Signal { &self - &rhs }`.",
+]
+
+[[exercise]]
+name = "10_checkpoint_money"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Start with the operators and `Default`: each builds a `Self::new(..)` from the `minor` fields, and `+=` changes `self.minor`. `total`: start from `Money::default()` and `+=` each price (`Money` is `Copy`, so `for &price in prices` works).",
+    "`Display`: print the sign separately and work on `self.minor.unsigned_abs()`, or -5 cents comes out wrong. With `scale = 10_u64.pow(C::DECIMALS)`, the parts are `abs / scale` and `abs % scale`, the second padded as `{:0width$}` with `width = C::DECIMALS as usize`. No '.' when `C::DECIMALS == 0`.",
+    "`from_str`: `strip_prefix('-')` first (\"-0\" parses as 0 and would lose the sign), then `split_once('.')`. Check each part is non-empty ASCII digits and the fraction has exactly `C::DECIMALS` of them; the result is `whole * 10^DECIMALS + fraction`, negated if needed. `convert`: `self.minor as f64 / 10_f64.powi(C::DECIMALS as i32)` is the amount in major units.",
+]

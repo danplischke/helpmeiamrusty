@@ -1,0 +1,318 @@
+# Predict-the-output questions. The runner compiles and runs each snippet;
+# the right choice is whichever matches what actually happens. Special
+# choices: "does not compile", "panics", "runs forever", "compiles".
+
+[[question]]
+prompt = "What happens?"
+code = '''
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Circle;
+struct Square;
+
+impl Shape for Circle {
+    fn area(&self) -> f64 {
+        3.14
+    }
+}
+
+impl Shape for Square {
+    fn area(&self) -> f64 {
+        1.0
+    }
+}
+
+fn make(round: bool) -> impl Shape {
+    if round { Circle } else { Square }
+}
+
+fn main() {
+    println!("{} {}", make(true).area(), make(false).area());
+}
+'''
+choices = ["3.14 1", "does not compile", "panics"]
+explain = """
+`impl Shape` in return position stands for *one* concrete type, chosen by
+the function body and hidden from callers. Here one branch is a `Circle`
+and the other a `Square`, so there is no single type (E0308). To pick at
+runtime, return `Box<dyn Shape>`, or an enum that implements `Shape`.
+"""
+drill = "03-traits/02_dispatch"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+struct Robot;
+
+impl Robot {
+    fn hello(&self) -> &str {
+        "inherent"
+    }
+}
+
+trait Greet {
+    fn hello(&self) -> &str {
+        "trait"
+    }
+}
+
+impl Greet for Robot {}
+
+fn main() {
+    let r = Robot;
+    println!("{} {}", r.hello(), Greet::hello(&r));
+}
+'''
+choices = ["inherent trait", "trait trait", "inherent inherent", "does not compile"]
+explain = """
+It isn't ambiguous: for the same receiver type, method-call syntax finds an
+inherent method before a trait method. To reach the trait's version, use the
+path form, `Greet::hello(&r)` or `<Robot as Greet>::hello(&r)`. The path
+form is also how you pick between two traits that define the same method
+name.
+"""
+drill = "03-traits/03_default_methods"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy)]
+struct Meters(f64);
+
+impl Add<i32> for Meters {
+    type Output = Meters;
+    fn add(self, rhs: i32) -> Meters {
+        Meters(self.0 + f64::from(rhs))
+    }
+}
+
+impl Add<f64> for Meters {
+    type Output = Meters;
+    fn add(self, rhs: f64) -> Meters {
+        Meters(self.0 + rhs * 2.0)
+    }
+}
+
+fn main() {
+    let m = Meters(1.0);
+    println!("{} {}", (m + 1).0, (m + 1.0).0);
+}
+'''
+choices = ["2 3", "2 2", "3 3", "does not compile"]
+explain = """
+`Add<Rhs>` has a generic parameter, so `Add<i32>` and `Add<f64>` are
+different traits and `Meters` can implement both. The right-hand operand
+picks the impl: `1` is an integer literal, so only `Add<i32>` fits, while
+`1.0` picks `Add<f64>`, which doubles. `Output` is an associated type: each
+impl has exactly one result type.
+"""
+drill = "03-traits/04_assoc_or_generic"
+
+[[question]]
+prompt = "Neither `From` nor `f64` is defined in this crate. What happens?"
+code = '''
+struct Meters(f64);
+
+impl From<Meters> for f64 {
+    fn from(m: Meters) -> f64 {
+        m.0
+    }
+}
+
+fn main() {
+    let x: f64 = Meters(1.5).into();
+    println!("{}", x + f64::from(Meters(2.0)));
+}
+'''
+choices = ["3.5", "does not compile"]
+explain = """
+The orphan rule wants a local type somewhere in the impl, and the trait's
+type parameters count: `From<Meters>` mentions `Meters`. No other crate can
+write this impl, so it can't conflict with anyone's. What's rejected (E0117)
+is something like `impl Display for Vec<Meters>`: a local type inside a
+foreign type doesn't count. And `From` brought `Into` along for free.
+"""
+drill = "03-traits/05_orphan_rule"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::fmt::Debug;
+
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+impl<T: Debug> Describe for T {
+    fn describe(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+#[derive(Debug)]
+struct Point(i32, i32);
+
+impl Describe for Point {
+    fn describe(&self) -> String {
+        format!("({}, {})", self.0, self.1)
+    }
+}
+
+fn main() {
+    println!("{} {}", 7.describe(), Point(1, 2).describe());
+}
+'''
+choices = ["7 (1, 2)", "7 Point(1, 2)", "does not compile"]
+explain = """
+The blanket impl already covers `Point`, because `Point` derives `Debug`.
+A second impl for `Point` overlaps it (E0119), and stable Rust has no
+specialization to prefer the more specific one. Without the derive it would
+compile: `Point` is local, so the compiler knows it isn't `Debug`.
+"""
+drill = "03-traits/05_orphan_rule"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+trait Named {
+    fn name(&self) -> String;
+}
+
+trait Plugin: Named {
+    fn run(&self) -> u32;
+}
+
+struct Spell;
+
+impl Named for Spell {
+    fn name(&self) -> String {
+        "spell".to_string()
+    }
+}
+
+impl Plugin for Spell {
+    fn run(&self) -> u32 {
+        42
+    }
+}
+
+fn label(item: &dyn Named) -> String {
+    format!("<{}>", item.name())
+}
+
+fn main() {
+    let plugin: Box<dyn Plugin> = Box::new(Spell);
+    let named: &dyn Named = &*plugin;
+    println!("{} {}", label(named), plugin.run());
+}
+'''
+choices = ["<spell> 42", "does not compile"]
+explain = """
+Trait upcasting, stable since Rust 1.86: a `&dyn Plugin` coerces to
+`&dyn Named` because `Named` is a supertrait of `Plugin`. Before that it was
+an error, and the usual workaround was an `as_named(&self) -> &dyn Named`
+method in every impl. Note the `&*plugin`: a `&Box<dyn Plugin>` is not a
+`&dyn Plugin`.
+"""
+drill = "03-traits/06_dyn_compatible"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+struct Meters(f64);
+
+impl Into<f64> for Meters {
+    fn into(self) -> f64 {
+        self.0
+    }
+}
+
+fn main() {
+    let a: f64 = Meters(1.5).into();
+    let b = f64::from(Meters(2.0));
+    println!("{a} {b}");
+}
+'''
+choices = ["1.5 2", "does not compile"]
+explain = """
+Std has `impl<T, U: From<T>> Into<U> for T`, so implementing `From` gives
+you `Into`. There's no blanket impl in the other direction: implementing
+`Into<f64>` gives `f64` no `From<Meters>` (E0277). Implement `From`; clippy's
+`from_over_into` lint says the same.
+"""
+drill = "03-traits/07_conversions"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::collections::HashMap;
+
+fn main() {
+    let mut stock: HashMap<&str, u32> = HashMap::new();
+    stock.insert("bolt", 40);
+    let wanted = String::from("bolt");
+    println!("{:?}", stock.get(&wanted));
+}
+'''
+choices = ["Some(40)", "None", "does not compile"]
+explain = """
+`get` is generic: `fn get<Q: ?Sized>(&self, k: &Q) where K: Borrow<Q>`.
+`&wanted` is a `&String`, so `Q = String`, and `&str: Borrow<String>`
+doesn't exist (E0277). There's no deref coercion to rescue it, because the
+parameter type is generic. `stock.get(wanted.as_str())` makes `Q = str`, and
+`&str: Borrow<str>` does hold.
+"""
+drill = "03-traits/08_eq_hash_ord"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let nan = f64::NAN;
+    let temps = [21.5, nan, 19.0];
+    let max = temps.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    println!("{} {} {max}", nan == nan, nan > 0.0 || nan <= 0.0);
+}
+'''
+choices = ["false false 21.5", "true false 21.5", "false false NaN", "true true NaN"]
+explain = """
+NaN isn't equal to itself and isn't ordered against anything. That's why
+`f64` implements `PartialEq` and `PartialOrd` but not `Eq` and `Ord`: so
+`.max()`, `.sort()` and `HashMap` keys don't work on floats. `f64::max`
+returns the other argument when one is NaN, so the fold skips it. For a
+total order, use `f64::total_cmp`, e.g. `v.sort_by(f64::total_cmp)`.
+"""
+drill = "03-traits/01_bounds"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::marker::PhantomData;
+
+#[derive(Debug, Clone, Copy)]
+struct Id<T> {
+    raw: u32,
+    _kind: PhantomData<T>,
+}
+
+struct User;
+
+fn main() {
+    let a: Id<User> = Id { raw: 7, _kind: PhantomData };
+    let b = a;
+    println!("{} {}", a.raw, b.raw);
+}
+'''
+choices = ["7 7", "does not compile"]
+explain = """
+`#[derive(Clone, Copy)]` on `Id<T>` generates `impl<T: Copy> Copy for
+Id<T>`: it bounds every type parameter, even one used only in `PhantomData`.
+`User` isn't `Copy`, so neither is `Id<User>`, and `let b = a` moves `a`
+(E0382). Derive the traits on `User` too, or implement `Clone` and `Copy`
+for `Id<T>` by hand, without the bound.
+"""
+drill = "03-traits/10_checkpoint_money"
