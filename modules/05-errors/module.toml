@@ -1,1 +1,103 @@
 title = "Error handling"
+
+[[exercise]]
+name = "01_option_result"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Start with `find`: `iter().find(..)` gives an `Option<&Employee>`, but the function returns a `Result`. Which `Option` method supplies the missing error?",
+    "`ok_or(err)` for a cheap error; `ok_or_else(|| err)` when building it costs something, like the `name.clone()` in `NoManager`. `desk_floor` returns `Option`, so `?` works on each `Option` step, and `.ok()` turns the parse `Result` into an `Option`.",
+    "`desk_floor`: `let (floor, _) = employee.desk.as_deref()?.split_once('-')?; floor.parse().ok()`. `parse_manager_field`: after trimming, `(!field.is_empty()).then(|| field.parse())` is an `Option<Result<u32, _>>`, and `.transpose()` flips it into the return type.",
+]
+
+[[exercise]]
+name = "02_question_mark"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Three errors are about `?` (all E0277); the fourth, in the tests, wants a `From` impl. For each `?`, compare what the expression gives (an `Option`, or a `Result` with which error?) with what the function returns.",
+    "`?` on a `Result` converts the error with `From::from`, and `EndpointError` has no `From<ParseIntError>` yet. `?` never turns an `Option` into a `Result` or back: give `None` a reason with `ok_or(..)`, or drop an error with `.ok()`.",
+    "`impl From<ParseIntError> for EndpointError { fn from(e: ParseIntError) -> Self { EndpointError::BadPort(e) } }`. Then `s.rsplit_once(':').ok_or(EndpointError::MissingPort)?`, and in `port_of`, `port.parse().ok()`.",
+]
+
+[[exercise]]
+name = "03_match_ladders"
+kind = "refactor"
+fails_at = "clippy"
+hints = [
+    "Work through clippy's list: `question_mark`, `manual_ok_err`, `redundant_closure`, `single_match` and `collapsible_match`. Each help text shows the shape of the fix.",
+    "`match r { Ok(v) => v, Err(e) => return Err(e) }` is `r?`. `match r { Ok(v) => Some(v), Err(_) => None }` is `r.ok()`. `|e| ReadingError::BadTemperature(e)` is just `ReadingError::BadTemperature`. Clippy doesn't flag `match s.strip_suffix('C') { .. }`, but it's `.unwrap_or(s)`.",
+    "`parse_reading`: `field(line, \"station\").ok_or(ReadingError::MissingField(\"station\"))?.parse().map_err(ReadingError::BadStation)?`. `field`: `line.split_whitespace().find_map(|part| { let (key, value) = part.split_once('=')?; (key == name).then_some(value) })`.",
+]
+
+[[exercise]]
+name = "04_error_enum"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Do `Display` first: one `match self` with a `write!(f, ..)` per variant, messages as the variant docs give them. Then ask of each variant: does it wrap another error? Those are the ones with a `source()`.",
+    "`source()` is `Some(e)` for `Io`, `Some(source)` for `BadLimit` (a `&ParseIntError` coerces to `&(dyn Error + 'static)` by itself), `None` for the rest. Keep the cause out of the message: the chain tests expect it once. `reader.read_to_string(&mut text)?` needs `mut reader` and uses your `From` impl.",
+    "Per line: `for (i, text_line) in text.lines().enumerate()`, collect `split_whitespace()` into a `Vec<&str>`, then `match fields[..] { [] => continue, [user, limit] => .., _ => return Err(QuotaError::Malformed { line: i + 1 }) }`. Then `limit.parse().map_err(|source| QuotaError::BadLimit { line: i + 1, source })?`.",
+]
+
+[[exercise]]
+name = "05_thiserror"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Start with thiserror's own error: \"deriving From requires no fields other than source and backtrace\". A `From<io::Error>` impl would have to invent the `name`. And if `Read` and `Write` both had `#[from] io::Error`, which variant would `?` pick?",
+    "Drop `#[from]` from `Read` and `Write`; a field named `source` is the cause without it. Choose the variant at each call site with `map_err`, which can also fill in `name`. `Manifest` is where `#[from]` belongs: a `ManifestError` always means that variant.",
+    "`src.read_to_end(&mut data).map_err(|source| BackupError::Read { name: name.to_string(), source })?;`, the same with `Write` for `write_all`, and `Manifest(#[from] ManifestError)` under `#[error(transparent)]`.",
+]
+
+[[exercise]]
+name = "06_anyhow_context"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Start with `parse_replicas`: parse, put a message on the error, then check the range. The `Context` trait (already imported) adds `.context()` and `.with_context()` to both `Result` and `Option`.",
+    "`.with_context(|| format!(\"replicas {value:?} is not a number\"))?`, then `ensure!((1..=50).contains(&n), ..)`. `bail!(..)` for a malformed entry. `parse_plan` wraps each `parse_entry(..)` in `.with_context(|| format!(\"line {}\", i + 1))`; that `{}` then prints only \"line 3\" is expected.",
+    "`load_plan`: `fs::read_to_string(path).with_context(|| format!(\"reading {}\", path.display()))?`, then the same around `parse_plan` with \"parsing\". `exit_code`: `err.downcast_ref::<io::Error>()` sees through the context, so check its `kind()`; `err.is::<ParseIntError>()` gives 65.",
+]
+
+[[exercise]]
+name = "07_collect_results"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Write `parse_row` first. The three importers all need the same thing, `parse_row(i + 1, row)` for every non-blank line, so write that once as a helper returning an iterator.",
+    "Collecting an iterator of `Result<T, E>` into `Result<Vec<T>, E>` stops at the first `Err`. `Result` implements `Sum` the same way. For the lenient import, a `for` loop with a `match` that pushes into one of two Vecs is the clearest.",
+    "`fn rows(csv: &str) -> impl Iterator<Item = Result<Entry, RowError>> { csv.lines().enumerate().filter(|(_, row)| !row.trim().is_empty()).map(|(i, row)| parse_row(i + 1, row)) }`. Then `rows(csv).collect()`, and `rows(csv).map(|r| r.map(|e| e.hours)).sum()`.",
+]
+
+[[exercise]]
+name = "08_box_dyn_error"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Three separate problems: a `&str` returned where a boxed error is expected, an error type that \"cannot be sent between threads safely\", and a `?` on what `join()` returns. Read what each message says is missing.",
+    "`?` converts a `&str` into a boxed error, but a plain `Err(\"..\")` doesn't: add `.into()`. Add `+ Send + Sync` to the `BoxError` alias. `join()` fails with the panic's payload, a `Box<dyn Any + Send>`, which isn't an `Error`, so map it to one.",
+    "`type BoxError = Box<dyn Error + Send + Sync>;`, `return Err(\"empty chunk\".into());`, and `total += worker.join().map_err(|_| \"worker panicked\")??;`.",
+]
+
+[[exercise]]
+name = "09_no_unwrap"
+kind = "constrain"
+fails_at = "test"
+constraints = ["no-unwrap"]
+hints = [
+    "First the panic: which arguments to `/slow` pass the digit check and still fail to parse? There are two kinds. Then the rule: clippy lists every `unwrap` and `expect` left.",
+    "Use the `Option` a method gives you instead of checking first: `let Some(body) = line.strip_prefix('/') else { return Err(..) };`, `split_once(' ').unwrap_or((body, \"\"))`, `map_or('?', ..)`, `match away.get(nick)`. For `/slow`, `parse` is the check: map its `Result`.",
+    "`\"slow\" if rest.is_empty() => Err(CommandError::MissingArgument(\"seconds\")),` then `\"slow\" => rest.parse().map(Command::Slow).map_err(|_| CommandError::BadNumber(rest.to_string())),`. `mentions`: `filter_map(|word| word.strip_prefix('@'))`, then drop the empty nicks.",
+]
+
+[[exercise]]
+name = "10_checkpoint_config"
+kind = "implement"
+fails_at = "test"
+constraints = ["no-unwrap"]
+hints = [
+    "Start with `parse_line`: `strip_prefix('[')` and `strip_suffix(']')` for a section, `split_once('=')` for a pair, `Syntax` when a trimmed part is empty. `parse_config` is then one loop with a `match` on what `parse_line` returns, keeping the current section in an `Option<&str>`.",
+    "Keep each value in an `Option` (`let mut port: Option<u16> = None;`) and a list of `(section, key, line)` already set, for `Duplicate`. `section.ok_or_else(..)?` covers `NoSection`. At the end, `host.ok_or(..)?` for the required keys and `unwrap_or(30)` for the defaults.",
+    "Match on `(section, key)`: `(\"server\", \"port\") => port = Some(value.parse().map_err(bad)?)`, and `_ => return Err(ConfigError::UnknownKey { .. })`, where `bad` is `|source| ConfigError::BadValue { line, key: key.to_string(), source }`. `load_config` is two `with_context` calls.",
+]
