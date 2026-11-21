@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+- **05 · Error handling**: 10 exercises (`Option` ↔ `Result`, `?` and
+  `From`, hand-written error enums, thiserror, anyhow context, collecting
+  `Result`s, `Box<dyn Error + Send + Sync>`, a no-unwrap drill, and an INI
+  config parser checkpoint), plus a 10-question quiz.
+- **06 · Iterators & collections**: 10 exercises (adaptors, laziness,
+  windows and chunks, loops rewritten as chains, sorting and searching,
+  custom iterators, `IntoIterator` for references, collecting into anything,
+  `VecDeque`/`BinaryHeap`/`BTreeMap::range`, and a log-analyzer checkpoint),
+  plus a 10-question quiz.
+- Quizzes can now ask about a `main` that returns `Err`: it matches "exits
+  with an error", not "panics".
+- The toolchain is pinned to Rust 1.97.0, the version every exercise and
+  quiz answer is verified on. rustup installs it automatically.
+
 ## [0.1.0] - 2026-11-21
 
 The first release: the `cargo rusty` runner and the first two modules.

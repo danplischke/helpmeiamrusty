@@ -1,3 +1,5 @@
 [toolchain]
-channel = "stable"
+# Pinned: clippy's lints and the compiler's messages change between releases,
+# and every exercise and quiz answer is verified on exactly this version.
+channel = "1.97.0"
 components = ["clippy", "rustfmt"]

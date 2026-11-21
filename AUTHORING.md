@@ -173,8 +173,14 @@ every line has to earn its place.
   | 1.87 | `Vec::extract_if`, `is_multiple_of` |
   | 1.88 | let chains (edition 2024) |
 
-  Leave the version out otherwise. The toolchain here is 1.97, so a feature
-  that compiles may be newer than you think.
+  Leave the version out otherwise. The course is pinned to 1.97.0
+  (`rust-toolchain.toml`), so a feature that compiles may be newer than you
+  think.
+- **Toolchain quirks worth knowing:**
+  - With `no-clone`, don't `#[derive(Clone)]` on types with non-`Copy`
+    fields. Clippy flags the `clone` calls inside the derive's expansion.
+  - Clippy 1.97's `manual_checked_ops` rejects `if d == 0 { 0 } else { x / d }`.
+    Write `x.checked_div(d).unwrap_or(0)`.
 
 ## Workflow
 

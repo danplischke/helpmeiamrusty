@@ -18,8 +18,9 @@ error[E0499]: cannot borrow `*self` as mutable more than once at a time
 
 ## Quick start
 
-You need Rust through [rustup](https://rustup.rs) (stable, 1.88 or newer).
-`rust-toolchain.toml` adds clippy and rustfmt automatically.
+You need [rustup](https://rustup.rs). The course pins the toolchain it was
+verified on (Rust 1.97.0, in `rust-toolchain.toml`), and rustup installs
+it, with clippy and rustfmt, the first time you run a command here.
 
 ```bash
 git clone https://github.com/danplischke/helpmeiamrusty
