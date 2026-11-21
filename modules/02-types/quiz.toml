@@ -1,0 +1,236 @@
+# Predict-the-output questions. The runner compiles and runs each snippet;
+# the right choice is whichever matches what actually happens. Special
+# choices: "does not compile", "panics", "runs forever", "compiles".
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn describe(v: &[i32]) -> String {
+    match v {
+        [] => "empty".to_string(),
+        [first, .., last] => format!("{first}..{last}"),
+        [x] => format!("just {x}"),
+    }
+}
+
+fn main() {
+    print!("{} ", describe(&[7]));
+    println!("{}", describe(&[1, 2, 3]));
+}
+'''
+choices = ["just 7 1..3", "7..7 1..3", "does not compile"]
+explain = """
+`..` matches zero or more elements, but `first` and `last` are two separate
+elements, so `[first, .., last]` needs at least two. A one-element slice
+falls through to `[x]`, which is reachable, so there's no warning either.
+The compiler checks slice patterns by length: `[]`, `[x]` and
+`[first, .., last]` together cover every slice.
+"""
+drill = "02-types/02_slice_patterns"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    for n in [1, 2, 3] {
+        match n {
+            x @ 1 | 2 => print!("small {x} "),
+            _ => print!("big "),
+        }
+    }
+    println!();
+}
+'''
+choices = ["small 1 small 2 big", "small 1 big big", "does not compile"]
+explain = """
+`|` binds more loosely than `@`, so this reads `(x @ 1) | 2`: the second
+alternative doesn't bind `x`, which is E0408 "variable `x` is not bound in
+all patterns". Every alternative must bind the same names with the same
+types. Write `x @ (1 | 2)`.
+"""
+drill = "02-types/03_nested_patterns"
+
+[[question]]
+prompt = "Does this compile?"
+code = '''
+fn sign(n: i32) -> &'static str {
+    match n {
+        x if x < 0 => "negative",
+        0 => "zero",
+        x if x > 0 => "positive",
+    }
+}
+
+fn main() {
+    println!("{}", sign(5));
+}
+'''
+choices = ["compiles", "does not compile"]
+explain = """
+E0004: the exhaustiveness check ignores guards, because a guard can be any
+expression. To the compiler, both guarded arms might fail, leaving
+everything but 0 uncovered. Say it with patterns instead
+(`i32::MIN..=-1`, `0`, `1..`), which the compiler can check, or match on
+`n.cmp(&0)`.
+"""
+drill = "02-types/03_nested_patterns"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let limit = 10;
+    for value in [3, 10] {
+        match value {
+            limit => print!("{value}=limit "),
+            _ => print!("{value}<limit "),
+        }
+    }
+    println!();
+}
+'''
+choices = ["3<limit 10=limit", "3=limit 10=limit", "does not compile"]
+explain = """
+An identifier in a pattern is a *new binding* that matches anything, so the
+first arm shadows the outer `limit` and catches every value. Rust only
+warns ("unreachable pattern", "unused variable"). A `const LIMIT: i32 = 10;`
+in a pattern does compare, which is one reason constants are UPPER_CASE.
+For a runtime value, use a guard: `v if v == limit`.
+"""
+drill = "02-types/03_nested_patterns"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let input = "x";
+    let Ok(n) = input.parse::<i32>() else {
+        println!("not a number");
+    };
+    println!("{n}");
+}
+'''
+choices = ["not a number", "panics", "does not compile"]
+explain = """
+The `else` block of `let ... else` must diverge: `return`, `break`,
+`continue`, `panic!` or anything else of type `!`. Otherwise `n` would be
+unbound on the next line, so this is E0308 "`else` clause of `let...else`
+does not diverge". For a fallback value instead, use `unwrap_or` or a
+`match`.
+"""
+drill = "02-types/05_flat_control_flow"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let raw = Some("42");
+    let a = raw.map(|s| s.parse::<i32>().ok());
+    let b = raw.and_then(|s| s.parse::<i32>().ok());
+    println!("{a:?} {b:?}");
+}
+'''
+choices = [
+    "Some(42) Some(42)",
+    "Some(Some(42)) Some(42)",
+    "Some(Some(42)) Some(Some(42))",
+    "does not compile",
+]
+explain = """
+`map` wraps whatever the closure returns, so a closure that returns an
+`Option` gives `Option<Option<i32>>`. `and_then` expects the closure to
+return an `Option` and doesn't wrap it again: it's `map` followed by
+`flatten`. Reach for `and_then` whenever the step itself can fail.
+"""
+drill = "02-types/05_flat_control_flow"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+#[non_exhaustive]
+enum Level {
+    Low,
+    High,
+}
+
+fn main() {
+    let level = Level::High;
+    let label = match level {
+        Level::Low => "low",
+        Level::High => "high",
+    };
+    println!("{label}");
+}
+'''
+choices = ["high", "does not compile"]
+explain = """
+`#[non_exhaustive]` only affects *other* crates. They must add a `_` arm
+when matching (and can't build a non-exhaustive struct with a literal), so
+the author can add variants or fields later without a breaking change.
+Inside the defining crate the attribute changes nothing, and this
+exhaustive match compiles.
+"""
+drill = "02-types/01_exhaustive_match"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+use std::mem::size_of;
+use std::num::NonZeroU32;
+
+fn main() {
+    print!("{} ", size_of::<Option<u32>>());
+    println!("{}", size_of::<Option<NonZeroU32>>());
+}
+'''
+choices = ["4 4", "8 4", "8 8", "5 5"]
+explain = """
+Every `u32` value is valid, so `Option<u32>` needs a separate tag, and
+alignment rounds it up to 8 bytes. `NonZeroU32` can never be 0, so `None`
+is stored as 0 at no cost (the "niche" optimization). A type that rules
+out bad values tells the compiler something it can use, like
+`Option<&T>` and `Option<Box<T>>`.
+"""
+drill = "02-types/07_parse_dont_validate"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let mut pair = (1, String::from("a"));
+    let (n, s) = &mut pair;
+    *n += 1;
+    s.push('b');
+    println!("{pair:?}");
+}
+'''
+choices = ['(1, "a")', '(1, "ab")', '(2, "ab")', "does not compile"]
+explain = """
+Destructuring a `&mut (i32, String)` with a non-reference pattern switches
+the binding mode to `ref mut` for the whole pattern, so `n` is a `&mut i32`
+into `pair`, even though `i32` is `Copy`. That's why `*n += 1` is needed
+and why it changes `pair`. To copy the number out instead, write
+`let &mut (n, ref mut s) = &mut pair;`.
+"""
+drill = "02-types/04_binding_modes"
+
+[[question]]
+prompt = "Edition 2024. What happens?"
+code = '''
+fn main() {
+    let name = Some(String::from("ferris"));
+    match &name {
+        Some(ref n) => println!("{n}"),
+        None => println!("nobody"),
+    }
+}
+'''
+choices = ["ferris", "does not compile"]
+explain = """
+Matching `&Option<String>` with `Some(..)` already binds by reference, so
+`ref` is redundant. Earlier editions accepted it; edition 2024 rejects
+`ref`, `mut` and `&` inside a pattern that borrows implicitly ("cannot
+explicitly borrow within an implicitly-borrowing pattern"). Drop the `ref`,
+or match explicitly with `&Some(ref n)`.
+"""
+drill = "02-types/04_binding_modes"
