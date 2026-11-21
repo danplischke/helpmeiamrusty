@@ -1,7 +1,17 @@
 title = "helpmeiamrusty"
 
 # Modules in course order. Each one is a folder in modules/.
-modules = ["00-warmup", "01-ownership"]
+modules = [
+    "00-warmup",
+    "01-ownership",
+    "02-types",
+    "03-traits",
+    "04-lifetimes",
+    "05-errors",
+    "06-iterators",
+]
 
 # Crates exercises may use. Copied into the generated work/Cargo.toml.
 [dependencies]
+anyhow = "1"
+thiserror = "2"
