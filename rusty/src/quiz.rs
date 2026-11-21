@@ -22,18 +22,21 @@ const SNIPPET_TIMEOUT: Duration = Duration::from_secs(5);
 pub enum Verdict {
     NoCompile(String),
     Panic(String),
+    /// Exited with a failure code without panicking, e.g. `main` returned `Err`.
+    ErrorExit(String),
     Output(String),
     Hang,
 }
 
 impl Verdict {
     /// Choices are matched against stdout, or one of the special answers
-    /// `does not compile`, `panics`, `runs forever`, `compiles`.
+    /// `does not compile`, `panics`, `exits with an error`, `runs forever`, `compiles`.
     pub fn matches(&self, choice: &str) -> bool {
         let choice = choice.trim();
         match self {
             Verdict::NoCompile(_) => choice == "does not compile",
             Verdict::Panic(_) => choice == "panics",
+            Verdict::ErrorExit(_) => choice == "exits with an error",
             Verdict::Hang => choice == "runs forever",
             Verdict::Output(out) => choice == "compiles" || choice == out.trim(),
         }
@@ -43,6 +46,9 @@ impl Verdict {
         match self {
             Verdict::NoCompile(err) => format!("It doesn't compile:\n{err}"),
             Verdict::Panic(msg) => format!("It compiles, then panics:\n{msg}"),
+            Verdict::ErrorExit(msg) => {
+                format!("It compiles, runs, and exits with an error:\n{msg}")
+            }
             Verdict::Hang => "It never finishes.".to_string(),
             Verdict::Output(out) if out.trim().is_empty() => {
                 "It compiles and runs, printing nothing.".to_string()
@@ -75,7 +81,13 @@ pub fn evaluate(code: &str, dir: &Path) -> Result<Verdict> {
     Ok(match run.status {
         None => Verdict::Hang,
         Some(status) if status.success() => Verdict::Output(run.stdout),
-        Some(_) => Verdict::Panic(panic_message(&run.stderr)),
+        // Rust exits with 101 after a panic; any other failure code is an ordinary error exit.
+        Some(status) if status.code() == Some(101) => Verdict::Panic(panic_message(&run.stderr)),
+        Some(_) => Verdict::ErrorExit(
+            format!("{}{}", run.stdout, run.stderr)
+                .trim_end()
+                .to_string(),
+        ),
     })
 }
 

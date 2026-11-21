@@ -128,7 +128,9 @@ exercise id like `"02-types/03_slice_patterns"`).
 - The runner compiles each snippet with `rustc --edition 2024`, debug
   assertions on and warnings allowed, then runs it. The right choice is
   whichever matches: the trimmed **stdout**, or one of the special choices
-  `"does not compile"`, `"panics"`, `"runs forever"`, `"compiles"`.
+  `"does not compile"`, `"panics"` (exit code 101), `"exits with an error"`
+  (any other failure, e.g. `main` returning `Err`), `"runs forever"`,
+  `"compiles"`.
 - **Print on one line** (use `print!` plus a final `println!`), so choices
   stay readable.
 - **Exactly one choice may match**, so don't offer `"compiles"` alongside an

@@ -1,6 +1,7 @@
 # Predict-the-output questions. The runner compiles and runs each snippet;
 # the right choice is whichever matches what actually happens. Special
-# choices: "does not compile", "panics", "runs forever", "compiles".
+# choices: "does not compile", "panics", "exits with an error",
+# "runs forever", "compiles".
 
 [[question]]
 prompt = "What does this print?"
