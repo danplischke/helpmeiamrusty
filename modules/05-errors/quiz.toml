@@ -1,0 +1,290 @@
+# Predict-the-output questions. The runner compiles and runs each snippet;
+# the right choice is whichever matches what actually happens. Special
+# choices: "does not compile", "panics", "runs forever", "compiles".
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+struct AppError(String);
+
+impl From<ParseIntError> for AppError {
+    fn from(e: ParseIntError) -> Self {
+        AppError(format!("bad number ({e})"))
+    }
+}
+
+fn double(s: &str) -> Result<i32, AppError> {
+    Ok(s.parse::<i32>()? * 2)
+}
+
+fn main() {
+    match double("4x") {
+        Ok(n) => println!("{n}"),
+        Err(AppError(msg)) => println!("{msg}"),
+    }
+}
+'''
+choices = [
+    "bad number (invalid digit found in string)",
+    "invalid digit found in string",
+    "does not compile",
+    "panics",
+]
+explain = """
+On `Err(e)`, `?` returns `Err(From::from(e))`, so the `From<ParseIntError>`
+impl runs and builds the `AppError`. No `map_err` needed: one `From` impl
+makes `?` work on that error type in every function returning `AppError`.
+Without it, this is E0277 "`?` couldn't convert the error to `AppError`".
+"""
+drill = "05-errors/02_question_mark"
+
+[[question]]
+prompt = "Does this compile?"
+code = '''
+use std::num::ParseIntError;
+
+fn parse_all(items: &[&str]) -> Result<Vec<i32>, ParseIntError> {
+    let numbers = items.iter().map(|s| s.parse::<i32>()?).collect();
+    Ok(numbers)
+}
+
+fn main() {
+    println!("{:?}", parse_all(&["1", "2"]));
+}
+'''
+choices = ["compiles", "does not compile"]
+explain = """
+`?` returns from the innermost function *or closure*. Here that's the
+closure, which returns `i32`, so `?` has nowhere to send the error (E0277).
+Let the closure return the `Result` and collect into one instead:
+`items.iter().map(|s| s.parse::<i32>()).collect()` with the
+`Result<Vec<i32>, _>` return type.
+"""
+drill = "05-errors/07_collect_results"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn fallback() -> String {
+    print!("built ");
+    String::from("missing")
+}
+
+fn main() {
+    let found: Option<u32> = Some(7);
+    let a = found.ok_or(fallback());
+    let b = found.ok_or_else(fallback);
+    println!("{a:?} {b:?}");
+}
+'''
+choices = [
+    "Ok(7) Ok(7)",
+    "built Ok(7) Ok(7)",
+    "built built Ok(7) Ok(7)",
+]
+explain = """
+Arguments are evaluated before the call, so `ok_or(fallback())` builds the
+error even though the value is there. `ok_or_else` takes a closure (or a
+function) and calls it only on `None`. The same goes for `unwrap_or` versus
+`unwrap_or_else` and `map_or` versus `map_or_else`. It matters when the
+error allocates or formats a message.
+"""
+drill = "05-errors/01_option_result"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+use std::num::ParseIntError;
+
+fn port(raw: Option<&str>) -> Result<Option<u16>, ParseIntError> {
+    raw.map(str::parse).transpose()
+}
+
+fn main() {
+    print!("{:?} ", port(Some("80")));
+    print!("{:?} ", port(None));
+    println!("{}", port(Some("x")).is_err());
+}
+'''
+choices = [
+    "Ok(Some(80)) Ok(None) true",
+    "Some(Ok(80)) None true",
+    "does not compile",
+]
+explain = """
+`map(str::parse)` gives an `Option<Result<u16, _>>`; `transpose` flips it
+into `Result<Option<u16>, _>`. `None` becomes `Ok(None)`: a missing value
+isn't an error, a bad one is. The return type is enough for inference to
+pick `parse::<u16>`, so no turbofish is needed.
+"""
+drill = "05-errors/01_option_result"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+use std::error::Error;
+use std::fmt;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+struct ConfigError {
+    source: ParseIntError,
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "bad port")
+    }
+}
+
+impl Error for ConfigError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+fn main() {
+    let source = "http".parse::<u16>().unwrap_err();
+    let err: Box<dyn Error> = Box::new(ConfigError { source });
+    println!("{err}");
+}
+'''
+choices = [
+    "bad port",
+    "bad port: invalid digit found in string",
+    "ConfigError { source: ParseIntError { kind: InvalidDigit } }",
+]
+explain = """
+`Display` prints one layer, whatever `source()` returns. Walking the chain
+is the reporter's job: a loop over `source()`, or anyhow's `{:#}`. That's
+why the convention is to keep the cause *out* of your own message when
+`source()` returns it; otherwise a full report says it twice.
+"""
+drill = "05-errors/04_error_enum"
+
+[[question]]
+prompt = "Does this compile?"
+code = '''
+use std::fmt;
+
+struct Timeout;
+
+impl fmt::Display for Timeout {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "timed out")
+    }
+}
+
+fn main() -> Result<(), Timeout> {
+    println!("connecting");
+    Ok(())
+}
+'''
+choices = ["compiles", "does not compile"]
+explain = """
+`main` may return `Result<(), E>` only if `E: Debug` (E0277), because on
+`Err(e)` the runtime prints `Error: {e:?}` and exits with code 1. It uses
+`Debug`, not `Display`. A derived `Debug` is fine for a quick script;
+anyhow's `Debug` output is the readable multi-line report, which is why
+`fn main() -> anyhow::Result<()>` prints errors well.
+"""
+drill = "05-errors/08_box_dyn_error"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let parsed: Result<Vec<i32>, _> = ["1", "x", "3"]
+        .iter()
+        .map(|s| {
+            print!("{s} ");
+            s.parse::<i32>()
+        })
+        .collect();
+    println!("{}", parsed.is_err());
+}
+'''
+choices = ["1 x 3 true", "1 x true", "1 3 true"]
+explain = """
+Collecting into `Result<Vec<_>, _>` pulls items one at a time and stops at
+the first `Err`, so "3" is never parsed. Iterators are lazy: the `map`
+closure only runs when `collect` asks for the next item. `sum` and
+`product` into a `Result` (or an `Option`) short-circuit the same way.
+"""
+drill = "05-errors/07_collect_results"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let results: Vec<Result<i32, String>> = vec![Ok(1), Err("bad".to_string()), Ok(3)];
+    let total: i32 = results.into_iter().flatten().sum();
+    println!("{total}");
+}
+'''
+choices = ["4", "1", "panics", "does not compile"]
+explain = """
+`Result` implements `IntoIterator`: one item for `Ok`, none for `Err`. So
+`flatten()` (like `filter_map(Result::ok)`) keeps the values and silently
+drops the errors. Sometimes that's what you want; in an importer it hides
+bad rows. To stop at the first error, sum into a `Result<i32, _>` instead.
+"""
+drill = "05-errors/07_collect_results"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn save(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("empty name".to_string());
+    }
+    print!("saved {name} ");
+    Ok(())
+}
+
+fn main() {
+    save("");
+    save("notes");
+    println!("done");
+}
+'''
+choices = [
+    "saved notes done",
+    "empty name saved notes done",
+    "panics",
+    "does not compile",
+]
+explain = """
+`Result` is `#[must_use]`, so ignoring one is a *warning* ("unused `Result`
+that must be used"), not an error, and the failure vanishes silently. Treat
+that warning as an error. To discard a result on purpose, write
+`let _ = save("");`. Put `#[must_use]` on your own types and functions
+whose return value is the whole point.
+"""
+
+[[question]]
+prompt = "What does this print? (Anything on stderr doesn't count.)"
+code = '''
+use std::thread;
+
+fn main() {
+    let worker = thread::spawn(|| {
+        let readings: Vec<i32> = Vec::new();
+        readings[0]
+    });
+    let result = worker.join();
+    println!("{}", result.is_err());
+}
+'''
+choices = ["true", "false", "panics"]
+explain = """
+A panic unwinds only the thread it happens in. `join()` then returns
+`Err(payload)`, and the main thread carries on. The payload is a
+`Box<dyn Any + Send>`, not an `Error`, so `?` can't propagate it; map it to
+an error of your own. This is how thread pools and the test harness survive
+a panicking task (unless the profile sets `panic = "abort"`).
+"""
+drill = "05-errors/08_box_dyn_error"
