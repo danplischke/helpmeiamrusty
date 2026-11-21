@@ -1,0 +1,71 @@
+title = "Warm-up & syntax speedrun"
+
+[[exercise]]
+name = "01_bindings"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Read the errors top to bottom. There are three kinds: a type mismatch on the `const`, `&f64` compared with `f64`, and assignments to immutable bindings.",
+    "`32` is an integer literal; an `f64` const needs `32.0`. `let lowest` needs `mut`. Inside the loop `r` is a `&f64`: write `*r`, or destructure it with `for &r in readings`.",
+    "Once it compiles, try replacing the two `if`s with `lowest = lowest.min(r)` and `highest = highest.max(r)`.",
+]
+
+[[exercise]]
+name = "02_expressions"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Range patterns: `1..=9` is inclusive, `10..` is open-ended, `i64::MIN..=-1` covers the negatives. `match` must cover every value, so there's no need for `_` if your ranges cover them all.",
+    "`n` needs to change, so make the parameter `mut n: u64`. `loop { if n == 1 { break steps; } ... }` returns `steps` from the loop. Clippy prefers `n.is_multiple_of(2)` to `n % 2 == 0`.",
+    "For the grid: `grid.iter().enumerate().find_map(|(row, cells)| cells.iter().position(|&c| c == target).map(|col| (row, col)))`. Or two nested `for` loops with a labelled `break 'outer`.",
+]
+
+[[exercise]]
+name = "03_strings"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "`str::split` accepts a closure: `phrase.split(|c: char| c.is_whitespace() || c == '-')`. Empty pieces have no first char, so `filter_map(|w| w.chars().next())` skips them.",
+    "`char::to_uppercase()` returns an iterator (some characters uppercase to two). Use `flat_map(char::to_uppercase)` or `first.to_uppercase().chain(rest)`. For `first_chars`, `s.char_indices().nth(n)` gives the byte offset where the n-th char starts.",
+    "Palindrome: build `let cleaned = s.chars().filter(..).flat_map(char::to_lowercase);` and compare `cleaned.clone().eq(cleaned.rev())`. Iterators can be cloned and compared without collecting.",
+]
+
+[[exercise]]
+name = "04_structs"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "For `parse`, split on '.' and map each part with `part.parse::<u32>().ok()`. You need exactly three parts, all numbers.",
+    "`parts.next()??` unwraps both layers of `Option<Option<u32>>` with `?`. After taking three parts, `parts.next()` must be `None`. For `Display`, `write!(f, \"{}.{}.{}\", ...)`.",
+    "If `orders_like_semver` still fails: how does a *derived* `Ord` compare two structs? Look at the order the fields are declared in.",
+]
+
+[[exercise]]
+name = "05_enums"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "`parse_pair`: call `split_whitespace().map(str::parse::<i32>)`, take three items with `next()`, and match the tuple: `(Some(Ok(a)), Some(Ok(b)), None)`.",
+    "`parse_command`: trim, then `line.split_once(' ').unwrap_or((line, \"\"))` gives `(verb, rest)`. Match on `verb` with guards like `\"say\" if !rest.is_empty()`.",
+    "`apply`: return early if `self.stopped`, then `match cmd { Command::Move { dx, dy } => ..., Command::Say(text) => self.said.push(text), ... }`. Matching on `cmd` by value moves the String out, with no clone.",
+]
+
+[[exercise]]
+name = "06_collections"
+kind = "implement"
+fails_at = "test"
+hints = [
+    "Counting: `*counts.entry(word.to_lowercase()).or_insert(0) += 1`. Split on `|c: char| !(c.is_alphanumeric() || c == '\\'')` and skip empty pieces.",
+    "Ranking: collect `counts.iter().map(|(w, &c)| (w.as_str(), c))` into a Vec, sort with `b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0))`, then `truncate(n)`.",
+    "`words.retain(|w| w.chars().count() >= min_len)`. For the index: `index.entry(first).or_default().push(word)`, then `sort_unstable()` + `dedup()` each group via `values_mut()`.",
+]
+
+[[exercise]]
+name = "07_modules"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Three errors: a path that doesn't resolve, a private function and a private module. Fix them one at a time, starting with the first error.",
+    "Inside `geometry::shapes`, the sibling module is reached with `super::format`. Paths in `use` and in expressions are relative to the module you're in.",
+    "Make `new` `pub`, and `format` `pub(crate)` (or `pub`). Don't make `radius` public: `Circle::new` is the way in.",
+]

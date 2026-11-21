@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Runner is formatted and lint-free
+        run: |
+          cargo fmt --manifest-path rusty/Cargo.toml --check
+          cargo clippy --manifest-path rusty/Cargo.toml -- -D warnings
+      - name: Every stub fails, every solution passes, every quiz has one answer
+        run: cargo rusty dev verify

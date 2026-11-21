@@ -1,0 +1,7 @@
+title = "helpmeiamrusty"
+
+# Modules in course order. Each one is a folder in modules/.
+modules = ["00-warmup", "01-ownership"]
+
+# Crates exercises may use. Copied into the generated work/Cargo.toml.
+[dependencies]

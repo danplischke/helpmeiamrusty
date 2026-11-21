@@ -1,0 +1,7 @@
+[alias]
+# Run from the repository root.
+rusty = "run --quiet --manifest-path rusty/Cargo.toml --"
+
+[build]
+# rusty/ and the generated work/ are separate workspaces; share one target dir.
+target-dir = "target"

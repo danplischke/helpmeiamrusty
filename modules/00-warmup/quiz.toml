@@ -1,0 +1,194 @@
+# Predict-the-output questions. The runner compiles and runs each snippet;
+# the right choice is whichever matches what actually happens. Special
+# choices: "does not compile", "panics", "runs forever", "compiles".
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let x = 5;
+    let x = x * 2;
+    {
+        let x = x + 1;
+        print!("{x} ");
+    }
+    println!("{x}");
+}
+'''
+choices = ["11 10", "11 11", "6 10", "does not compile"]
+explain = """
+Each `let x` creates a new binding that shadows the previous one. The inner
+`let x = x + 1` only lives until the end of its block, so afterwards `x` is
+the outer binding again (10). Shadowing is not mutation: no `mut` needed, and
+the type may even change.
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let x: u8 = 255;
+    let y = x + 1;
+    println!("{y}");
+}
+'''
+choices = ["0", "256", "panics", "does not compile"]
+explain = """
+The compiler can see this overflow at compile time, and the
+`arithmetic_overflow` lint is deny-by-default, so it's a hard error. When the
+overflow depends on runtime values instead, debug builds panic and release
+builds wrap. Say what you mean with `wrapping_add`, `checked_add`,
+`saturating_add` or `overflowing_add`.
+"""
+
+[[question]]
+prompt = "And now the value comes from runtime input. What happens in a debug build?"
+code = '''
+fn main() {
+    let x: u8 = "255".parse().unwrap();
+    let y = x + 1;
+    println!("{y}");
+}
+'''
+choices = ["0", "256", "panics", "does not compile"]
+explain = """
+Debug builds check arithmetic for overflow and panic with "attempt to add
+with overflow". Release builds (`--release`) wrap to 0 silently unless you set
+`overflow-checks = true` in the profile.
+"""
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let y = {
+        let x = 3;
+        x + 1
+    };
+    let z = {
+        2 * y;
+    };
+    println!("{y} {z:?}");
+}
+'''
+choices = ["4 8", "4 ()", "4 4", "does not compile"]
+explain = """
+A block evaluates to its final expression, unless that expression ends with a
+semicolon. Then it's a statement and the block evaluates to `()`. The same
+rule is behind the classic "mismatched types: expected i32, found ()" when a
+function body ends with `x * 2;`.
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let s = String::from("hello");
+    let c = s[0];
+    println!("{c}");
+}
+'''
+choices = ["h", "104", "panics", "does not compile"]
+explain = """
+Strings can't be indexed by integers (`String: Index<usize>` isn't
+implemented), because a byte offset may land inside a multi-byte character
+and a "character" is ambiguous in UTF-8 anyway. Use `s.chars().next()`,
+`s.as_bytes()[0]`, or a range slice like `&s[0..1]`.
+"""
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let s = "héllo";
+    println!("{} {}", s.len(), s.chars().count());
+}
+'''
+choices = ["5 5", "6 5", "5 6", "6 6"]
+explain = """
+`len()` is the length in bytes. 'é' takes two bytes in UTF-8, so the string
+is 6 bytes long but has 5 chars (Unicode scalar values).
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let s = "héllo";
+    println!("{}", &s[0..2]);
+}
+'''
+choices = ["hé", "h", "panics", "does not compile"]
+explain = """
+Range indexing on `str` is by byte offset. Byte 2 falls in the middle of 'é'
+(bytes 1 and 2), so slicing panics at runtime: "byte index 2 is not a char
+boundary". `s.char_indices()` gives safe offsets; `s.get(0..2)` returns
+`None` instead of panicking.
+"""
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn main() {
+    let mut n = 1;
+    let found = loop {
+        n *= 3;
+        if n > 50 {
+            break n - 1;
+        }
+    };
+    println!("{found}");
+}
+'''
+choices = ["80", "81", "26", "does not compile"]
+explain = """
+`loop` is an expression, and `break value` is how it produces one. n goes
+3, 9, 27, 81; 81 > 50, so the loop evaluates to 80. Only `loop` can break with
+a value (`while` and `for` might run zero times, so they can't).
+"""
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+#[derive(PartialEq, PartialOrd)]
+struct Version {
+    minor: u32,
+    major: u32,
+}
+
+fn main() {
+    let old = Version { major: 1, minor: 9 };
+    let new = Version { major: 2, minor: 0 };
+    println!("{}", old < new);
+}
+'''
+choices = ["true", "false", "does not compile"]
+explain = """
+Derived `PartialOrd`/`Ord` compare fields in declaration order, like a
+tuple. `minor` is declared first, so 9 vs 0 decides it: `old < new` is
+false. Exercise 04 has the same trap.
+"""
+drill = "00-warmup/04_structs"
+
+[[question]]
+prompt = "Edition 2024. What does this print?"
+code = '''
+fn main() {
+    let a = Some(3);
+    let b = Some(4);
+    if let Some(x) = a
+        && let Some(y) = b
+        && x < y
+    {
+        println!("{}", x + y);
+    } else {
+        println!("nope");
+    }
+}
+'''
+choices = ["7", "nope", "does not compile"]
+explain = """
+Let chains: `if let ... && let ... && condition` was stabilized in Rust 1.88
+for the 2024 edition. It replaces nested `if let`s or a `match` on a tuple.
+`while let` chains work too.
+"""

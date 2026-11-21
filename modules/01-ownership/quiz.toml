@@ -1,0 +1,204 @@
+# Predict-the-output questions. The runner compiles and runs each snippet;
+# the right choice is whichever matches what actually happens. Special
+# choices: "does not compile", "panics", "runs forever", "compiles".
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let a = 5;
+    let b = a;
+    let s = String::from("hi");
+    let t = s;
+    println!("{a} {b} {s} {t}");
+}
+'''
+choices = ["5 5 hi hi", "does not compile", "panics"]
+explain = """
+`i32` is `Copy`, so `let b = a` copies and both stay usable. `String` owns a
+heap buffer and isn't `Copy`: `let t = s` *moves* it, and using `s` afterwards
+is E0382 "borrow of moved value". A type can be `Copy` only if it has no
+`Drop` and all its fields are `Copy`.
+"""
+drill = "01-ownership/01_moves"
+
+[[question]]
+prompt = "Does this compile?"
+code = '''
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &v[0];
+    v.push(4);
+    println!("{first}");
+}
+'''
+choices = ["compiles", "does not compile"]
+explain = """
+E0502: `first` borrows `v` immutably and is used after `v.push(4)` borrows it
+mutably. The rule protects you from a real bug: `push` may reallocate the
+buffer, which would leave `first` pointing at freed memory.
+"""
+drill = "01-ownership/02_aliasing"
+
+[[question]]
+prompt = "Same code, one line moved. What happens?"
+code = '''
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &v[0];
+    print!("{first} ");
+    v.push(4);
+    println!("{}", v.len());
+}
+'''
+choices = ["1 4", "does not compile"]
+explain = """
+Non-lexical lifetimes: a borrow lasts until its last *use*, not until the end
+of the scope. `first` is last used before the `push`, so there's no overlap.
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let mut v: Vec<usize> = vec![10, 20];
+    v.push(v.len());
+    println!("{v:?}");
+}
+'''
+choices = ["[10, 20, 2]", "[10, 20, 3]", "does not compile"]
+explain = """
+It looks like `&mut v` (for push) overlaps with `&v` (for len). Two-phase
+borrows let it through: the `&mut` for a method call is only *reserved* while
+the arguments are evaluated, and activated afterwards. The argument is
+evaluated before the push, so it's 2.
+"""
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+struct Noisy(&'static str);
+
+impl Drop for Noisy {
+    fn drop(&mut self) {
+        print!("{} ", self.0);
+    }
+}
+
+fn main() {
+    let _a = Noisy("a");
+    let _b = Noisy("b");
+    let _ = Noisy("c");
+    print!("end ");
+}
+'''
+choices = ["c end b a", "end c b a", "end a b c", "c end a b"]
+explain = """
+`let _ = value` doesn't bind anything, so the temporary is dropped
+immediately: "c" first. `_a` and `_b` *are* bindings (the underscore only
+silences unused warnings). They live until the end of `main` and are dropped
+in reverse order of declaration: b, then a. This matters for lock guards:
+`let _ = mutex.lock()` releases the lock straight away.
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let names = vec![String::from("ann"), String::from("bob")];
+    let first = names[0];
+    println!("{first}");
+}
+'''
+choices = ["ann", "panics", "does not compile"]
+explain = """
+E0507: indexing gives you a *place*, and you can't move a `String` out of a
+Vec's place (that would leave a hole). Borrow it (`&names[0]`), clone it, or
+take ownership with `names.swap_remove(0)` / `names.into_iter().next()`.
+"""
+drill = "01-ownership/05_take_and_replace"
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let v = vec![1, 2, 3];
+    for x in v {
+        print!("{x}");
+    }
+    println!(" {}", v.len());
+}
+'''
+choices = ["123 3", "does not compile", "panics"]
+explain = """
+`for x in v` calls `IntoIterator::into_iter(v)`, which consumes the Vec (even
+though its elements are `Copy`). Use `for x in &v` (yields `&i32`) or
+`for x in v.iter()`. `for x in &mut v` yields `&mut i32`.
+"""
+drill = "01-ownership/01_moves"
+
+[[question]]
+prompt = "What does this print?"
+code = '''
+fn add_one(x: &mut i32) {
+    *x += 1;
+}
+
+fn main() {
+    let mut n = 0;
+    let r = &mut n;
+    add_one(r);
+    add_one(r);
+    println!("{n}");
+}
+'''
+choices = ["2", "1", "does not compile"]
+explain = """
+`&mut i32` isn't `Copy`, so you might expect `r` to be moved into the first
+call. When the parameter type is known to be `&mut`, the compiler implicitly
+*reborrows*: it passes `&mut *r`, a shorter borrow, and `r` is usable again
+afterwards. (In generic code where the type is inferred, you may need to
+write `&mut *r` yourself.)
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+struct Pair {
+    left: String,
+    right: String,
+}
+
+fn main() {
+    let pair = Pair {
+        left: "x".to_string(),
+        right: "y".to_string(),
+    };
+    let left = pair.left;
+    println!("{left} {}", pair.right);
+}
+'''
+choices = ["x y", "does not compile"]
+explain = """
+Partial moves are allowed: moving `pair.left` out leaves `pair.right` usable.
+What you can't do afterwards is use `pair` as a whole (pass it somewhere,
+print it with Debug). This doesn't work for types that implement `Drop`, or
+through a reference.
+"""
+
+[[question]]
+prompt = "What happens?"
+code = '''
+fn main() {
+    let a = String::from("tic");
+    let b = String::from("tac");
+    let c = a + &b;
+    println!("{c} {a}");
+}
+'''
+choices = ["tictac tic", "tictac tac", "does not compile"]
+explain = """
+`String + &str` is `fn add(self, other: &str) -> String`: it takes the left
+side by value and reuses its buffer, so `a` is moved into `c`. That's why the
+right side must be a reference. `format!("{a}{b}")` borrows both instead.
+"""

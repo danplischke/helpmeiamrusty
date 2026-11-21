@@ -3,6 +3,10 @@
 > A terminal-first course for someone who **already knew Rust** and wants
 > fluency back: fast where you remember, deep where you've gone rusty.
 
+**Status:** Phase 1 is built. The runner, modules 00–01 with their quizzes,
+the tutor setup for Claude Code and CI are in place. See the
+[README](README.md) to start.
+
 ## 1. The idea in three principles
 
 1. **Retrieval before reading.** Every module opens with a short *"does this
@@ -114,22 +118,28 @@ draws on.
 
 ```text
 helpmeiamrusty/
-├── Cargo.toml                 # workspace, edition 2024
-├── rust-toolchain.toml        # pinned stable toolchain (+ clippy, rustfmt)
-├── .cargo/config.toml         # `cargo rusty` alias
-├── rusty/                     # the runner CLI
+├── course.toml                # module order + crates exercises may use
+├── rust-toolchain.toml        # stable toolchain (+ clippy, rustfmt)
+├── .cargo/config.toml         # `cargo rusty` alias, shared target dir
+├── rusty/                     # the runner CLI (its own workspace)
 ├── modules/
 │   └── 01-ownership/
 │       ├── README.md          # 1-page refresher: mental model + gotchas
 │       ├── module.toml        # order, kinds, hints, constraints per exercise
 │       ├── quiz.toml          # predict-the-output snippets + explanations
-│       ├── exercises/         # one bin target per exercise
+│       ├── exercises/         # pristine starting points
 │       └── solutions/         # reference solutions + notes on why they're idiomatic
-├── projects/                  # capstones; tests/milestone_N.rs per stage
-├── progress/                  # your progress (committed, so it follows you between machines)
+├── work/                      # generated: your copies (one bin target each) + progress.toml
+├── projects/                  # capstones; tests/milestone_N.rs per stage (later phases)
 ├── CLAUDE.md                  # tutor rules for Claude Code (see §8)
+├── .claude/skills/            # /critique and /drill
 └── .github/workflows/ci.yml   # checks every solution passes and every stub fails
 ```
+
+There's deliberately no root `Cargo.toml`. `rusty/` and the generated
+`work/` are separate workspaces that share one `target/` directory, and
+rust-analyzer picks up both. Your edits live only in `work/`, so pulling
+course updates never conflicts with them.
 
 ## 7. The runner: `cargo rusty`
 
@@ -170,7 +180,8 @@ that switches it into tutor mode:
   "show me".
 - When you ask for help, it asks what the compiler said, explains the error
   code, and walks you through the hints one level at a time.
-- `/review`: once you pass an exercise, it critiques your code for idiom,
+- `/critique` (named so it doesn't clash with Claude Code's built-in
+  `/review`): once you pass an exercise, it critiques your code for idiom,
   compares it with the reference solution, and suggests the one change worth
   making.
 - `/drill <topic>`: it writes fresh "does it compile?" questions on a topic

@@ -1,0 +1,17 @@
+[package]
+name = "rusty"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+description = "Runner for the helpmeiamrusty Rust refresher course"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+# A standalone workspace: there is no root Cargo.toml, so rust-analyzer finds
+# both this package and the generated work/ package next to it.
+[workspace]

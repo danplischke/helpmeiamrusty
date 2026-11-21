@@ -1,0 +1,96 @@
+title = "Ownership & borrowing"
+
+[[exercise]]
+name = "01_moves"
+kind = "fix"
+fails_at = "compile"
+constraints = ["no-clone"]
+hints = [
+    "Look at how the tests call each function: `total_len(&words)`, `shout(\"literal\")`, `active_labels(&users, ..)`. The signatures have to accept those.",
+    "Borrow the most general form: `&[String]` instead of `Vec<String>`, `&str` instead of `String`. In `greeting`, `user.name` tries to move a field out of a borrowed struct; take `&user.name`.",
+    "`for user in *users` tries to move the Vec out of the borrow. Iterate over the reference instead: `for user in users` when `users: &[User]`.",
+]
+
+[[exercise]]
+name = "02_aliasing"
+kind = "fix"
+fails_at = "compile"
+constraints = ["no-clone"]
+hints = [
+    "In each function a `&` borrow is still alive when something needs `&mut`. Find where each borrow is last used.",
+    "`repeat_first`: `i32` is `Copy`, so `let first = v[0];` copies it and no borrow remains. `lend_first`: do the `&mut` call first, or finish with `title` before it.",
+    "`append_halves`: you can't push while iterating. Collect the halves into a new Vec first (`iter().filter(..).map(..).collect()`), then `v.extend(halves)`.",
+]
+
+[[exercise]]
+name = "03_return_refs"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "Ask of each function: does the result borrow from an argument, or is it newly built? A newly built value has to be returned owned.",
+    "`longest_word`: keep `best` as a `&str` pointing into `text` (`let mut best = \"\";`) and return it. `make_greeting`: return `String`.",
+    "`first_match` has two reference parameters, so elision can't pick one. `fn first_match<'a>(haystack: &'a str, needle: &str) -> Option<&'a str>`. Leave `needle` out of `'a`; the test drops it early.",
+]
+
+[[exercise]]
+name = "04_split_borrows"
+kind = "fix"
+fails_at = "compile"
+constraints = ["no-clone", "no-indexing", "no-unsafe"]
+hints = [
+    "`award_all`: `self.record(..)` borrows all of `self` while `player` borrows `self.players`. Push to the field directly: `self.log.push(..)` borrows only `self.log`.",
+    "`transfer`: two `&mut self.players[..]` at once is two mutable borrows of the same Vec. There's a slice method that returns several disjoint `&mut` elements as a `Result`.",
+    "`let [giver, taker] = self.players.get_disjoint_mut([from, to]).map_err(..)?;`. Its error is `std::slice::GetDisjointMutError` with variants `IndexOutOfBounds` and `OverlappingIndices`.",
+]
+
+[[exercise]]
+name = "05_take_and_replace"
+kind = "fix"
+fails_at = "compile"
+constraints = ["no-clone"]
+hints = [
+    "Each error is E0507: moving out of something behind `&mut self`. Instead of moving out and refilling, swap the new value in and get the old one back in one step.",
+    "`self.pending.take()` for the `Option`. `std::mem::take(&mut self.history)` for the `Vec` (works for any `Default` type).",
+    "`disconnect`: `match mem::replace(&mut self.state, Connection::Idle) { Connection::Connected { session, unsent } => { .. } other => { self.state = other; None } }`.",
+]
+
+[[exercise]]
+name = "06_slice_params"
+kind = "refactor"
+fails_at = "compile"
+hints = [
+    "Every parameter is narrower than it needs to be. Which borrowed type accepts a Vec, an array *and* a sub-slice? Which accepts a String *and* a literal?",
+    "`&Vec<T>` becomes `&[T]` and `&String` becomes `&str`. The bodies don't change, and callers holding a Vec or String still pass `&thing`.",
+    "If clippy still complains, it's about `main`: `&vec![..]` allocates just to borrow. An array literal `&[..]` does the same job.",
+]
+
+[[exercise]]
+name = "07_entry_api"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "The `get_or_compute` error is a known blind spot of today's borrow checker (rejecting a conditional return of a borrow). Instead of fighting it, avoid the double lookup altogether.",
+    "`cache.entry(key).or_insert_with(|| compute(key))` returns `&mut String`, which coerces to the `&String` you return. `or_insert_with` only calls the closure if the key is missing.",
+    "`tally`: `*counts.entry(word).or_insert(0) += 1;`. `group_by_len`: `groups.entry(word.len()).or_default().push(word);`.",
+]
+
+[[exercise]]
+name = "08_mutate_while_iterating"
+kind = "fix"
+fails_at = "compile"
+hints = [
+    "`sessions.remove(i)` needs `&mut` while `iter()` holds `&`. Removing by index while counting up also skips the next element. Look for a Vec method that removes by condition.",
+    "`retain` keeps elements for which the closure returns true, and the closure can push to `evicted` as it goes. `Vec::extract_if` (Rust 1.87) removes the matching elements *and* hands them to you.",
+    "`sessions.extract_if(.., |s| s.expires_at <= now).map(|s| s.id).collect()`. For `extend_all`: `for session in sessions { session.expires_at += secs; }`.",
+]
+
+[[exercise]]
+name = "09_checkpoint_inventory"
+kind = "implement"
+fails_at = "test"
+constraints = ["no-clone", "no-unwrap"]
+hints = [
+    "`restock`: `match self.items.iter_mut().find(|i| i.name == name) { Some(item) => item.qty += qty, None => self.items.push(..) }` compiles fine. `take_audit` is a one-liner from exercise 05.",
+    "`take`: get a position with `iter().position(..)`, turn the `Option` into an error with `.ok_or(InventoryError::UnknownItem)?`, then mutate `self.items[pos]` and `remove(pos)` once that borrow is done.",
+    "`most_stocked`: `max_by_key` returns the *last* of equal maxima, so the tie test fails. Try `self.items.iter().rev().max_by_key(|i| i.qty)`. `rename`: check that `new` is free *before* changing anything.",
+]
