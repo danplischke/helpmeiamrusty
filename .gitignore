@@ -1,1 +1,3 @@
 /target
+# Scratch worktrees used while authoring modules in parallel.
+/.claude/worktrees/
